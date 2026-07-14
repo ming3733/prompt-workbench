@@ -106,6 +106,7 @@ const promptStorageKey = 'promptly-prompts-v1';
 const folderStorageKey = 'promptly-folders-v1';
 const accountStorageKey = 'promptly-account-v1';
 const workspaceStorageKey = 'promptly-workspaces-v1';
+const themeStorageKey = 'promptly-theme-v1';
 
 function cloneStarterPrompts() {
   return starterPrompts.map((prompt) => ({ ...prompt, tags: [...prompt.tags], preview: normalizePreviewSource(prompt.preview) }));
@@ -127,6 +128,27 @@ function loadStoredObject(key, fallback = null) {
   } catch {
     return fallback;
   }
+}
+
+function loadThemePreference() {
+  try {
+    return localStorage.getItem(themeStorageKey) === 'dark';
+  } catch {
+    return false;
+  }
+}
+
+function persistThemePreference() {
+  try {
+    localStorage.setItem(themeStorageKey, state.dark ? 'dark' : 'light');
+  } catch {
+    // Theme preference is optional; the current session remains usable.
+  }
+}
+
+function syncThemeClass() {
+  document.documentElement.classList.toggle('theme-dark', state.dark);
+  document.body.classList.toggle('theme-dark', state.dark);
 }
 
 function normalizePromptType(type, kind = 'text') {
@@ -352,7 +374,7 @@ const state = {
   selectMode: false,
   sortDirection: 'desc',
   drawerEditing: false,
-  dark: false,
+  dark: loadThemePreference(),
   workspaceId: initialWorkspace.id,
   workspaces: workspaceCatalog.workspaces,
   prompts: clonePrompts(initialWorkspace.prompts),
@@ -414,7 +436,7 @@ Use a fixed top bar, a compact left documentation sidebar, and a spacious three-
 Visual language: pale blue-gray canvas, white surfaces, crisp black typography, blue primary actions, thin cool-gray borders, 12px radius, subtle shadows, and calm information density.
 
 Library cards show prompt title, type, excerpt, source, tags, update date, preview image, favorite, and copy actions. UI Analysis accepts a screenshot, PRD, or prototype link and returns structured layout, content, typography, color, component, and responsive rules. Include search, filters, import/export, detail drawer, copy feedback, and add-to-library states.`,
-  通用: `设计一个面向 AI 创作者的「小明提示词库」。包含提示词库和 UI 分析两个入口：提示词库支持关键词搜索、标签筛选、预览、复制、导入导出和新增；UI 分析支持上传截图、粘贴 PRD 或输入原型链接，输出布局、内容、色彩、字体、组件、交互与响应式规则，并可编辑、复制和加入提示词库。整体采用浅蓝灰背景、白色卡片、黑色文字、蓝色主按钮、细边框和适度圆角，桌面端三栏、移动端单列适配。`,
+  通用: `设计一个面向 AI 创作者的「提示词库」。包含提示词库和 UI 分析两个入口：提示词库支持关键词搜索、标签筛选、预览、复制、导入导出和新增；UI 分析支持上传截图、粘贴 PRD 或输入原型链接，输出布局、内容、色彩、字体、组件、交互与响应式规则，并可编辑、复制和加入提示词库。整体采用浅蓝灰背景、白色卡片、黑色文字、蓝色主按钮、细边框和适度圆角，桌面端三栏、移动端单列适配。`,
 };
 
 state.analysis.promptByTarget = { ...analysisPrompt };
@@ -497,9 +519,78 @@ function icon(name, size = 16) {
   return `<i data-lucide="${name}" width="${size}" height="${size}"></i>`;
 }
 
+function renderCustomSelect(id, options, selectedValue, iconName = 'list-filter') {
+  const selected = options.includes(selectedValue) ? selectedValue : options[0];
+  return `
+    <div class="custom-select" data-custom-select="${escapeAttr(id)}">
+      <input type="hidden" id="${escapeAttr(id)}" value="${escapeAttr(selected)}" />
+      <button class="custom-select-trigger" type="button" data-select-trigger aria-haspopup="listbox" aria-expanded="false">
+        <span class="custom-select-value"><span class="custom-select-icon">${icon(iconName, 15)}</span><span data-select-label>${escapeHtml(selected)}</span></span>
+        <span class="custom-select-caret">${icon('chevron-down', 15)}</span>
+      </button>
+      <div class="custom-select-menu" role="listbox">
+        ${options.map((option) => `<button class="custom-select-option ${option === selected ? 'is-selected' : ''}" type="button" role="option" aria-selected="${option === selected ? 'true' : 'false'}" data-select-option="${escapeAttr(option)}">${escapeHtml(option)}</button>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function wireCustomSelect(root) {
+  const trigger = root?.querySelector('[data-select-trigger]');
+  const input = root?.querySelector('input[type="hidden"]');
+  const label = root?.querySelector('[data-select-label]');
+  const options = [...(root?.querySelectorAll('[data-select-option]') || [])];
+  const close = () => {
+    root?.classList.remove('is-open');
+    trigger?.setAttribute('aria-expanded', 'false');
+  };
+  const open = () => {
+    root?.classList.add('is-open');
+    trigger?.setAttribute('aria-expanded', 'true');
+  };
+  const setValue = (value) => {
+    if (!input || !label) return;
+    input.value = value;
+    label.textContent = value;
+    options.forEach((option) => {
+      const selected = option.dataset.selectOption === value;
+      option.classList.toggle('is-selected', selected);
+      option.setAttribute('aria-selected', selected ? 'true' : 'false');
+    });
+  };
+  trigger?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    root?.classList.contains('is-open') ? close() : open();
+  });
+  options.forEach((option) => option.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setValue(option.dataset.selectOption);
+    close();
+    trigger?.focus();
+  }));
+  root?.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      close();
+      trigger?.focus();
+    }
+  });
+  return { close, setValue };
+}
+
+function sidebarFolderIcon(folder) {
+  const label = String(folder || '').toLowerCase();
+  if (folder === '全部') return 'library-big';
+  if (label.includes('浏览器') || label.includes('收集')) return 'inbox';
+  if (label.includes('产品') || label.includes('界面') || label.includes('ui')) return 'panels-top-left';
+  if (label.includes('图片') || label.includes('图像') || label.includes('风格') || label.includes('灵感')) return 'images';
+  if (folder === '未整理' || label.includes('未整理')) return 'archive';
+  return 'folder-open';
+}
+
 function render() {
+  syncThemeClass();
   app.innerHTML = `
-    <div class="app-shell ${state.hasRendered ? 'has-rendered' : 'is-entering'}">
+    <div class="app-shell ${state.dark ? 'is-dark' : ''} ${state.hasRendered ? 'has-rendered' : 'is-entering'}">
       ${renderTopbar()}
       <div class="app-body">
         ${renderSidebar()}
@@ -528,12 +619,14 @@ function renderTopbar() {
   const libraryActive = state.view === 'library';
   const analyzerActive = state.view === 'analyzer';
   const dataActive = state.view === 'data';
+  const themeLabel = state.dark ? '暗色' : '浅色';
+  const themeTitle = state.dark ? '切换到浅色模式' : '切换到暗色模式';
   return `
     <header class="topbar">
       <div class="brand-lockup">
         <div class="brand-mark">${icon('sparkles', 17)}</div>
         <div>
-          <div class="brand-name">小明提示词库</div>
+          <div class="brand-name">提示词库</div>
           <div class="brand-subtitle">AI 创作工作台</div>
         </div>
       </div>
@@ -554,7 +647,7 @@ function renderTopbar() {
         <kbd>⌘K</kbd>
       </label>
       <div class="topbar-actions">
-        <button class="theme-button" data-action="toggle-theme" title="当前固定为浅色模式">${icon('sun', 16)}<span>浅色</span></button>
+        <button class="theme-button" data-action="toggle-theme" title="${themeTitle}">${icon(state.dark ? 'moon' : 'sun', 16)}<span>${themeLabel}</span></button>
         <button class="account-button ${state.account ? 'is-signed-in' : ''}" data-action="open-account" title="邮箱登录与同步">${icon(state.account ? 'cloud-check' : 'log-in', 15)}<span>${state.account ? escapeHtml(state.account.email) : '登录同步'}</span></button>
         <button class="primary-button top-create" data-action="quick-capture">${icon('plus', 16)}<span>收录内容</span></button>
         <button class="mobile-menu" data-action="toggle-mobile-sidebar" title="打开导航">${icon('menu', 18)}</button>
@@ -576,8 +669,8 @@ function renderSidebar() {
         <button class="icon-button small" data-action="new-folder" title="新建文件夹">${icon('plus', 14)}</button>
       </div>
       <div class="folder-list">
-        <button class="folder-item ${selectedFolder === '全部' ? 'is-selected' : ''}" data-filter="全部">${icon('folder', 15)}<span>全部提示词</span><span class="folder-count">${state.prompts.length}</span></button>
-        ${state.folders.map((folder) => `<button class="folder-item ${selectedFolder === folder ? 'is-selected' : ''}" data-filter="${escapeAttr(folder)}">${icon(folder === '未整理' ? 'inbox' : 'folder', 15)}<span>${escapeHtml(folder)}</span><span class="folder-count">${folderCount(folder)}</span></button>`).join('')}
+        <button class="folder-item ${selectedFolder === '全部' ? 'is-selected' : ''}" data-filter="全部">${icon(sidebarFolderIcon('全部'), 15)}<span>全部提示词</span><span class="folder-count">${state.prompts.length}</span></button>
+        ${state.folders.map((folder) => `<button class="folder-item ${selectedFolder === folder ? 'is-selected' : ''}" data-filter="${escapeAttr(folder)}">${icon(sidebarFolderIcon(folder), 15)}<span>${escapeHtml(folder)}</span><span class="folder-count">${folderCount(folder)}</span></button>`).join('')}
       </div>
       <div class="sidebar-divider"></div>
       <div class="sidebar-section tag-heading">
@@ -1604,7 +1697,9 @@ function handleAction(action, element, event) {
   if (action === 'open-workspaces') return openWorkspaceModal();
   if (action === 'toggle-theme') {
     state.dark = !state.dark;
+    persistThemePreference();
     render();
+    showToast(state.dark ? '已切换暗色模式' : '已切换浅色模式', state.dark ? 'moon' : 'sun');
     return;
   }
   if (action === 'import') {
@@ -1802,7 +1897,7 @@ function openCaptureModal() {
           <button class="icon-button capture-image-remove" data-modal-action="remove-image" title="删除封面" hidden>${icon('trash-2', 14)}</button>
         </div>
         <div class="capture-title-row"><label class="field-label">标题<input id="capture-title" placeholder="可留空，让 AI 生成" /></label><button class="outline-button capture-ai-button" data-modal-action="ai-title">${icon('wand-sparkles', 14)}<span>AI 标题</span></button></div>
-        <label class="field-label">类型<select id="capture-type">${promptTypes.map((type) => `<option>${type}</option>`).join('')}</select></label>
+        <label class="field-label has-dropdown">类型${renderCustomSelect('capture-type', promptTypes, promptTypes[0], 'shapes')}</label>
         <label class="field-label">标签（可选）<input id="capture-tags" list="capture-tag-suggestions" placeholder="例如：UI 设计，参考图" /></label>
         <datalist id="capture-tag-suggestions">${getTagStats().map(({ tag }) => `<option value="${escapeAttr(tag.replace(/^#/, ''))}"></option>`).join('')}</datalist>
         <div class="field-hint">用逗号、顿号或竖线分隔；保存时自动补 # 并合并重复标签。</div>
@@ -1819,6 +1914,7 @@ function openCaptureModal() {
   const preview = modal.querySelector('#capture-image-preview');
   const removeImage = modal.querySelector('[data-modal-action="remove-image"]');
   const imageBox = modal.querySelector('#capture-image-box');
+  const typeSelect = wireCustomSelect(modal.querySelector('[data-custom-select="capture-type"]'));
   let imageData = '';
   const updateImage = (value) => {
     imageData = value || '';
@@ -1837,7 +1933,13 @@ function openCaptureModal() {
     reader.readAsDataURL(file);
   };
   modal.querySelectorAll('[data-modal-action="close"]').forEach((button) => button.addEventListener('click', () => modal.remove()));
-  modal.addEventListener('click', (event) => { if (event.target === modal) modal.remove(); });
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) {
+      modal.remove();
+      return;
+    }
+    if (!event.target.closest('.custom-select')) typeSelect.close();
+  });
   modal.addEventListener('paste', (event) => {
     const item = [...(event.clipboardData?.items || [])].find((entry) => entry.type.startsWith('image/'));
     if (!item) return;

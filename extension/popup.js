@@ -5,6 +5,9 @@ const pageTitle = document.querySelector('#page-title');
 const pageUrl = document.querySelector('#page-url');
 const title = document.querySelector('#title');
 const type = document.querySelector('#type');
+const typeSelect = document.querySelector('#type-select');
+const typeTrigger = document.querySelector('.custom-select-trigger');
+const typeLabel = document.querySelector('#type-label');
 const tags = document.querySelector('#tags');
 const content = document.querySelector('#content');
 const imageBox = document.querySelector('#image-box');
@@ -20,6 +23,22 @@ const queuedCount = document.querySelector('#queued-count');
 const historyCount = document.querySelector('#history-count');
 let imageData = '';
 let currentSource = { title: '', url: '' };
+
+function setPromptType(value) {
+  const normalized = normalizePromptType(value, imageData ? 'image' : 'text');
+  type.value = normalized;
+  typeLabel.textContent = normalized;
+  document.querySelectorAll('.custom-select-option').forEach((option) => {
+    const selected = option.dataset.value === normalized;
+    option.classList.toggle('is-selected', selected);
+    option.setAttribute('aria-selected', selected ? 'true' : 'false');
+  });
+}
+
+function closeTypeMenu() {
+  typeSelect.classList.remove('is-open');
+  typeTrigger.setAttribute('aria-expanded', 'false');
+}
 
 function setMessage(text, isError = false) {
   message.textContent = text;
@@ -133,7 +152,7 @@ function applyCaptureDraft(capture) {
   setSource({ title: capture.sourceTitle || '浏览器收录', url: capture.sourceUrl || '' });
   content.value = capture.content || capture.text || '';
   title.value = compactTitle(capture.title || content.value, capture.kind === 'image' ? '网页参考图片' : '网页提示词收录');
-  type.value = normalizePromptType(capture.type, capture.kind);
+  setPromptType(normalizePromptType(capture.type, capture.kind));
   tags.value = tagsToInputValue(capture.tags || []);
   setImage(capture.preview || capture.image || '');
   selectionHint.textContent = capture.kind === 'image'
@@ -179,6 +198,29 @@ document.addEventListener('paste', (event) => {
   reader.readAsDataURL(file);
   event.preventDefault();
   setMessage('图片已粘贴');
+});
+
+typeTrigger.addEventListener('click', (event) => {
+  event.stopPropagation();
+  const open = !typeSelect.classList.contains('is-open');
+  typeSelect.classList.toggle('is-open', open);
+  typeTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+});
+
+document.querySelectorAll('.custom-select-option').forEach((option) => {
+  option.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setPromptType(option.dataset.value);
+    closeTypeMenu();
+  });
+});
+
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('.custom-select')) closeTypeMenu();
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeTypeMenu();
 });
 
 removeImage.addEventListener('click', () => {
@@ -255,3 +297,4 @@ backupButton.addEventListener('click', async () => {
 });
 
 initializePopup();
+setPromptType(type.value);

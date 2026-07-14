@@ -1,10 +1,13 @@
 import { createIcons, icons } from 'lucide';
 import './style.css';
 
+const assetBase = import.meta.env.BASE_URL || './';
+const publicAsset = (path) => `${assetBase}${path.replace(/^\/+/, '')}`;
+
 const referenceImages = {
-  library: '/reference/prompt-library-reference.png',
-  mobile: '/reference/prompt-mobile-reference.png',
-  collector: '/reference/prompt-collector-reference.png',
+  library: publicAsset('reference/prompt-library-reference.png'),
+  mobile: publicAsset('reference/prompt-mobile-reference.png'),
+  collector: publicAsset('reference/prompt-collector-reference.png'),
 };
 
 const promptTypes = ['UI提示词', '图片提示词', 'icon提示词', '视频提示词'];

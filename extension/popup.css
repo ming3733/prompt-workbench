@@ -3,8 +3,18 @@
   font-family: Arial, "Noto Sans SC", sans-serif;
   color: #1d2530;
   background: #f5f8fc;
+  --scrollbar-thumb: rgba(153, 164, 180, .52);
+  --scrollbar-thumb-hover: rgba(103, 114, 132, .74);
 }
 * { box-sizing: border-box; }
+* { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+*:hover, *:focus-within { scrollbar-color: var(--scrollbar-thumb) transparent; }
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { border: 1px solid transparent; border-radius: 999px; background: transparent; background-clip: padding-box; }
+*:hover::-webkit-scrollbar-thumb, *:focus-within::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); background-clip: padding-box; }
+*::-webkit-scrollbar-corner { background: transparent; }
 body { width: 348px; margin: 0; background: #f5f8fc; }
 .popup { display: grid; gap: 11px; padding: 16px; }
 .brand { display: flex; align-items: center; gap: 9px; }

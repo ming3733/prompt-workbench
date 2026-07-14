@@ -515,6 +515,28 @@ const syncModalScrollLock = () => {
 
 new MutationObserver(syncModalScrollLock).observe(document.body, { childList: true });
 
+const scrollActivityTimers = new WeakMap();
+
+function markScrollActivity(scroller) {
+  if (!scroller?.classList) return;
+  scroller.classList.add('is-scrolling');
+  const existingTimer = scrollActivityTimers.get(scroller);
+  if (existingTimer) window.clearTimeout(existingTimer);
+  const timer = window.setTimeout(() => {
+    scroller.classList.remove('is-scrolling');
+    scrollActivityTimers.delete(scroller);
+  }, 900);
+  scrollActivityTimers.set(scroller, timer);
+}
+
+window.addEventListener('scroll', () => {
+  markScrollActivity(document.documentElement);
+}, { passive: true });
+
+document.addEventListener('scroll', (event) => {
+  if (event.target instanceof HTMLElement) markScrollActivity(event.target);
+}, { capture: true, passive: true });
+
 function icon(name, size = 16) {
   return `<i data-lucide="${name}" width="${size}" height="${size}"></i>`;
 }

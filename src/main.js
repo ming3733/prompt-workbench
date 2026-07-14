@@ -487,6 +487,12 @@ function promptHasTag(prompt, selectedTag) {
 
 const app = document.querySelector('#app');
 
+const syncModalScrollLock = () => {
+  document.body.classList.toggle('modal-open', Boolean(document.querySelector('.modal-backdrop')));
+};
+
+new MutationObserver(syncModalScrollLock).observe(document.body, { childList: true });
+
 function icon(name, size = 16) {
   return `<i data-lucide="${name}" width="${size}" height="${size}"></i>`;
 }
@@ -1791,9 +1797,7 @@ function openCaptureModal() {
     <div class="prompt-modal capture-modal" role="dialog" aria-modal="true" aria-labelledby="capture-modal-title">
       <div class="modal-head"><div><span class="eyebrow">QUICK CAPTURE</span><h2 id="capture-modal-title">快速收录</h2></div><button class="icon-button" data-modal-action="close" title="关闭">${icon('x', 17)}</button></div>
       <div class="modal-body">
-        <p class="capture-helper">粘贴文字先收录，之后再整理。需要封面时，直接粘贴图片即可显示。</p>
-        <div class="capture-image-box" id="capture-image-box">
-          <div class="capture-image-empty">${icon('image-plus', 18)}<strong>封面图</strong><span>粘贴图片作为封面，再次粘贴会直接替换</span></div>
+        <div class="capture-image-box" id="capture-image-box" aria-label="封面区域，粘贴图片后显示封面">
           <img id="capture-image-preview" alt="已添加封面" hidden />
           <button class="icon-button capture-image-remove" data-modal-action="remove-image" title="删除封面" hidden>${icon('trash-2', 14)}</button>
         </div>
@@ -1815,7 +1819,6 @@ function openCaptureModal() {
   const preview = modal.querySelector('#capture-image-preview');
   const removeImage = modal.querySelector('[data-modal-action="remove-image"]');
   const imageBox = modal.querySelector('#capture-image-box');
-  const imageEmpty = modal.querySelector('.capture-image-empty');
   let imageData = '';
   const updateImage = (value) => {
     imageData = value || '';
@@ -1823,7 +1826,6 @@ function openCaptureModal() {
     else preview.removeAttribute('src');
     preview.hidden = !imageData;
     removeImage.hidden = !imageData;
-    imageEmpty.hidden = Boolean(imageData);
     imageBox.classList.toggle('has-image', Boolean(imageData));
   };
   const readCaptureImageFile = (file) => {

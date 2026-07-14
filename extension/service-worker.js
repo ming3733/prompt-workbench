@@ -63,7 +63,7 @@ function captureFromTab(tab, content, overrides = {}) {
   return {
     id: `browser-${Date.now()}`,
     kind: 'text',
-    type: '提示词',
+    type: 'UI提示词',
     title: compactTitle(captureTitle),
     content,
     sourceTitle: tab.title || '浏览器收录',

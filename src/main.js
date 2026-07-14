@@ -7,11 +7,13 @@ const referenceImages = {
   collector: '/reference/prompt-collector-reference.png',
 };
 
+const promptTypes = ['UI提示词', '图片提示词', 'icon提示词', '视频提示词'];
+
 const starterPrompts = [
   {
     id: 1,
     title: '高密度创作型提示词管理后台',
-    type: 'UI 设计',
+    type: 'UI提示词',
     folder: '产品界面',
     tags: ['#工作台', '#三栏布局'],
     status: '常用',
@@ -24,7 +26,7 @@ const starterPrompts = [
   {
     id: 2,
     title: '克制留白的移动端收集页',
-    type: 'UI 设计',
+    type: 'UI提示词',
     folder: '产品界面',
     tags: ['#移动端', '#搜索'],
     status: '最近使用',
@@ -62,28 +64,28 @@ const starterPrompts = [
   },
   {
     id: 5,
-    title: '自然路径 Logo 场景',
-    type: '图片提示词',
+    title: '清透玻璃质感功能图标',
+    type: 'icon提示词',
     folder: '图片风格',
-    tags: ['#Logo 渲染', '#自然'],
+    tags: ['#图标', '#玻璃质感'],
     status: '全部',
     updated: '2026/06/12',
     source: '灵感收录',
     preview: referenceImages.library,
-    prompt: '将品牌 Logo 融入一条由森林、溪流与柔和日光组成的自然路径中，保持 Logo 的形状与比例不变。航拍构图，绿色层次丰富，光线从树冠间穿透，画面有真实摄影质感和清晰的品牌识别度。',
+    prompt: '设计一枚清透玻璃质感的应用功能图标，主体为发光的魔法闪光符号，保持 1:1 构图、圆角图标容器、柔和蓝色高光、轻微折射和干净阴影。图标需要在小尺寸下保持识别清晰，背景透明或极浅色。',
     favorite: false,
   },
   {
     id: 6,
-    title: '暖橙人物光影肖像',
-    type: '图片提示词',
+    title: '产品功能发布短视频',
+    type: '视频提示词',
     folder: '图片风格',
-    tags: ['#人物渲染', '#肖像'],
+    tags: ['#短视频', '#产品发布'],
     status: '全部',
     updated: '2026/06/09',
     source: '手动收录',
     preview: referenceImages.collector,
-    prompt: '生成一张暖橙色背景的人物半身肖像，主体正面看向镜头，穿着深色简洁服装，轮廓由柔和的侧向光勾勒，肤质自然，背景干净无杂物，画面像品牌人物海报，保留高级摄影的细节和空间感。',
+    prompt: '生成一支 12 秒产品功能发布短视频。节奏从快速网页收录开始，镜头推进到提示词库卡片，再切到复制提示词和 UI 分析结果。整体使用浅色 SaaS 工作台风格、蓝色关键高亮、轻快转场、干净字幕和清晰鼠标操作轨迹，结尾停在“已录入提示库”的成功状态。',
     favorite: false,
   },
 ];
@@ -113,6 +115,23 @@ function loadStoredObject(key, fallback = null) {
   } catch {
     return fallback;
   }
+}
+
+function normalizePromptType(type, kind = 'text') {
+  const raw = String(type || '').replace(/\s+/g, '').toLowerCase();
+  if (raw.includes('图片') || raw.includes('image')) return '图片提示词';
+  if (raw.includes('icon') || raw.includes('图标')) return 'icon提示词';
+  if (raw.includes('视频') || raw.includes('video')) return '视频提示词';
+  if (raw.includes('ui') || raw.includes('界面') || raw.includes('设计') || raw.includes('提示词') || raw.includes('描述词')) return 'UI提示词';
+  return kind === 'image' ? '图片提示词' : 'UI提示词';
+}
+
+function promptTypeClass(type) {
+  const normalized = normalizePromptType(type);
+  if (normalized === '图片提示词') return 'image-type';
+  if (normalized === 'icon提示词') return 'icon-type';
+  if (normalized === '视频提示词') return 'video-type';
+  return 'ui-type';
 }
 
 function tagIdentity(tag) {
@@ -151,7 +170,7 @@ function tagsToInputValue(tags) {
 }
 
 function clonePrompts(prompts) {
-  return (Array.isArray(prompts) ? prompts : []).map((prompt) => ({ ...prompt, tags: normalizeTags(prompt.tags) }));
+  return (Array.isArray(prompts) ? prompts : []).map((prompt) => ({ ...prompt, type: normalizePromptType(prompt.type), tags: normalizeTags(prompt.tags) }));
 }
 
 function normalizeWorkspace(workspace, index = 0) {
@@ -244,7 +263,7 @@ function promptFromCapture(capture) {
   const content = String(capture.content || capture.text || '').trim();
   const sourceUrl = String(capture.sourceUrl || '').trim();
   if (!content && !sourceUrl) return null;
-  const type = capture.type || (capture.kind === 'image' ? '图片提示词' : '提示词');
+  const type = normalizePromptType(capture.type, capture.kind);
   const prompt = type === '图片提示词'
     ? `参考图片：${content}\n\n请提取这张图片的构图、主体、色彩、材质和光影特征，整理成可复用的图片生成提示词。`
     : content || `收录页面：${capture.sourceTitle || sourceUrl}`;
@@ -308,7 +327,7 @@ const state = {
   dark: false,
   workspaceId: initialWorkspace.id,
   workspaces: workspaceCatalog.workspaces,
-  prompts: clonePrompts(initialWorkspace.prompts).map((prompt) => prompt.type === '描述词' ? { ...prompt, type: '提示词' } : prompt),
+  prompts: clonePrompts(initialWorkspace.prompts),
   folders: [...initialWorkspace.folders],
   account: loadStoredObject(accountStorageKey),
   incomingCapture: Boolean(incomingCapture),
@@ -339,7 +358,7 @@ if (incomingCapture) {
   }
   window.history.replaceState({}, document.title, window.location.pathname);
 }
-if (state.prompts.some((prompt) => prompt.type === '提示词')) persistPrompts();
+persistPrompts();
 
 const analysisPrompt = {
   Codex: `请基于上传的界面参考，生成一个可运行的响应式网页原型。
@@ -498,9 +517,6 @@ function renderTopbar() {
         <kbd>⌘K</kbd>
       </label>
       <div class="topbar-actions">
-        <button class="workspace-switcher" data-action="open-workspaces" title="切换本地数据页签">${icon('layers-2', 15)}<span>${escapeHtml(getActiveWorkspace()?.name || '我的本地库')}</span><small>${state.prompts.length}</small></button>
-        <button class="quiet-button" data-action="export" title="导出 JSON">${icon('file-json', 15)}<span>JSON</span></button>
-        <button class="quiet-button" data-action="import" title="导入提示词">${icon('upload', 15)}<span>导入</span></button>
         <button class="theme-button" data-action="toggle-theme" title="切换主题">${icon(state.dark ? 'sun' : 'moon', 16)}<span>${state.dark ? '浅色' : '深色'}</span></button>
         <button class="account-button ${state.account ? 'is-signed-in' : ''}" data-action="open-account" title="邮箱登录与同步">${icon(state.account ? 'cloud-check' : 'log-in', 15)}<span>${state.account ? escapeHtml(state.account.email) : '登录同步'}</span></button>
         <button class="primary-button top-create" data-action="quick-capture">${icon('plus', 16)}<span>收录内容</span></button>
@@ -513,6 +529,9 @@ function renderTopbar() {
 function renderSidebar() {
   const tags = getTagStats();
   const selectedFolder = state.selectedTag ? '' : (state.libraryFilter === '全部' || state.folders.includes(state.libraryFilter) ? state.libraryFilter : '');
+  const folderCount = (folder) => state.prompts.filter((prompt) => (
+    folder === '未整理' ? promptMatchesLibraryFilter(prompt, '未整理') : prompt.folder === folder
+  )).length;
   return `
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-section sidebar-intro">
@@ -521,7 +540,7 @@ function renderSidebar() {
       </div>
       <div class="folder-list">
         <button class="folder-item ${selectedFolder === '全部' ? 'is-selected' : ''}" data-filter="全部">${icon('folder', 15)}<span>全部提示词</span><span class="folder-count">${state.prompts.length}</span></button>
-        ${state.folders.map((folder) => `<button class="folder-item ${selectedFolder === folder ? 'is-selected' : ''}" data-filter="${escapeAttr(folder)}">${icon(folder === '未整理' ? 'inbox' : 'folder', 15)}<span>${escapeHtml(folder)}</span><span class="folder-count">${state.prompts.filter((prompt) => prompt.folder === folder).length}</span></button>`).join('')}
+        ${state.folders.map((folder) => `<button class="folder-item ${selectedFolder === folder ? 'is-selected' : ''}" data-filter="${escapeAttr(folder)}">${icon(folder === '未整理' ? 'inbox' : 'folder', 15)}<span>${escapeHtml(folder)}</span><span class="folder-count">${folderCount(folder)}</span></button>`).join('')}
       </div>
       <div class="sidebar-divider"></div>
       <div class="sidebar-section tag-heading">
@@ -556,9 +575,10 @@ function renderLibrary() {
           <p class="page-description">把好用的提示词、视觉方向和界面规则，整理成随时可复用的创作资产。</p>
         </div>
         <div class="heading-stats">
-          <div><strong>${state.prompts.filter((item) => item.type === 'UI 设计').length}</strong><span>UI 提示词</span></div>
+          <div><strong>${state.prompts.filter((item) => item.type === 'UI提示词').length}</strong><span>UI提示词</span></div>
           <div><strong>${state.prompts.filter((item) => item.type === '图片提示词').length}</strong><span>图片提示词</span></div>
-          <div><strong>${state.prompts.filter((item) => item.favorite).length}</strong><span>常用</span></div>
+          <div><strong>${state.prompts.filter((item) => item.type === 'icon提示词').length}</strong><span>icon提示词</span></div>
+          <div><strong>${state.prompts.filter((item) => item.type === '视频提示词').length}</strong><span>视频提示词</span></div>
         </div>
       </div>
       <div class="library-toolbar">
@@ -569,12 +589,11 @@ function renderLibrary() {
           <button class="outline-button ${state.selectMode ? 'is-active' : ''}" data-action="select-mode">${icon('list-checks', 15)}<span>${state.selectMode ? '退出选择' : '选择'}</span></button>
           ${state.selectMode ? `<button class="outline-button" data-action="select-all">${icon('check-check', 15)}<span>全选</span></button><button class="outline-button" data-action="copy-selected" ${state.selectedPromptIds.length ? '' : 'disabled'}>${icon('copy', 15)}<span>复制选中 (${state.selectedPromptIds.length})</span></button>` : ''}
           <button class="outline-button" data-action="sort-prompts">${icon('arrow-down-up', 15)}<span>${state.sortDirection === 'desc' ? '最近更新' : '最早更新'}</span></button>
-          <button class="primary-button" data-action="quick-capture">${icon('plus', 15)}<span>收录内容</span></button>
         </div>
       </div>
       <div class="filter-chip-row">
         <span class="filter-caption">筛选：</span>
-        ${['全部类型', '提示词', 'UI 设计', '图片提示词'].map((item) => `<button class="filter-chip ${item === state.typeFilter ? 'is-active' : ''}" data-type-filter="${item}">${item}</button>`).join('')}
+        ${['全部类型', ...promptTypes].map((item) => `<button class="filter-chip ${item === state.typeFilter ? 'is-active' : ''}" data-type-filter="${item}">${item}</button>`).join('')}
         <span class="filter-result">已显示 ${filtered.length} 个</span>
       </div>
       <div class="prompt-grid" id="prompt-grid">
@@ -589,7 +608,7 @@ function renderPromptCard(prompt) {
     <article class="prompt-card ${samePromptId(state.selectedPromptId, prompt.id) ? 'is-focused' : ''} ${isPromptSelected(prompt.id) ? 'is-selected' : ''}" data-prompt-id="${escapeAttr(prompt.id)}">
       <div class="card-topline">
         ${state.selectMode ? `<label class="check-wrap"><input type="checkbox" aria-label="选择 ${escapeAttr(prompt.title)}" ${isPromptSelected(prompt.id) ? 'checked' : ''} /><span></span></label>` : ''}
-        <span class="prompt-type ${prompt.type === 'UI 设计' ? 'ui-type' : prompt.type === '图片提示词' ? 'image-type' : 'generic-type'}">${prompt.type}</span>
+        <span class="prompt-type ${promptTypeClass(prompt.type)}">${escapeHtml(normalizePromptType(prompt.type))}</span>
       </div>
       <button class="card-main" data-open-prompt="${escapeAttr(prompt.id)}">
         <div class="card-title-line"><h2>${escapeHtml(prompt.title)}</h2><span class="favorite-button ${prompt.favorite ? 'is-favorite' : ''}" data-favorite="${escapeAttr(prompt.id)}" role="button" title="${prompt.favorite ? '取消常用' : '加入常用'}">${icon(prompt.favorite ? 'star' : 'star', 16)}</span></div>
@@ -800,7 +819,7 @@ function renderSourceContent() {
         <span class="drop-action">${a.hasAsset ? '更换素材' : '选择文件'}</span>
       </button>
       <div class="source-sample"><span>快速试用参考图</span><button class="sample-card ${a.assetPreview === referenceImages.mobile ? 'is-selected' : ''}" data-sample="${referenceImages.mobile}" data-action="use-sample"><img src="${referenceImages.mobile}" alt="移动端提示词收集页参考图" />${a.assetPreview === referenceImages.mobile ? `<span>${icon('check', 12)}</span>` : ''}</button><button class="sample-card ${a.assetPreview === referenceImages.collector ? 'is-selected' : ''}" data-sample="${referenceImages.collector}" data-action="use-sample"><img src="${referenceImages.collector}" alt="提示词收集器参考图" />${a.assetPreview === referenceImages.collector ? `<span>${icon('check', 12)}</span>` : ''}</button></div>
-      <button class="analyze-button ${a.analyzing ? 'is-loading' : ''}" data-action="analyze">${icon(a.analyzing ? 'loader-circle' : 'wand-sparkles', 17)}<span>${a.analyzing ? '正在分析界面...' : a.completed ? '重新分析这张图' : '开始分析素材'}</span></button>
+      <button class="analyze-button ${a.analyzing ? 'is-loading' : ''}" data-action="analyze">${icon(a.analyzing ? 'loader-circle' : 'wand-sparkles', 17)}<span>${a.analyzing ? '正在分析界面...' : a.completed ? '重新分析这张图' : '开始分析'}</span></button>
     `;
   }
   if (a.source === 'PRD') {
@@ -830,15 +849,8 @@ function renderPromptDrawer() {
     <aside class="prompt-drawer">
       <div class="drawer-head"><div><span class="eyebrow">PROMPT DETAIL</span><h2>提示词详情</h2></div><button class="icon-button" data-action="close-drawer" title="关闭详情">${icon('x', 17)}</button></div>
       <div class="drawer-scroll">
-        ${editing ? `<div class="drawer-cover-editor">
-          <img id="drawer-cover-preview" class="drawer-image" src="${escapeAttr(prompt.preview)}" alt="${escapeAttr(prompt.title)} 参考图" />
-          <div class="drawer-cover-actions">
-            <label class="cover-upload-button">${icon('image-plus', 14)}<span>上传封面</span><input id="drawer-cover-file" type="file" accept="image/*" hidden /></label>
-            <input id="drawer-cover-url" value="${escapeAttr(prompt.preview)}" placeholder="或粘贴图片链接" />
-          </div>
-          <small>支持图片链接或 2MB 内本地图片。</small>
-        </div>` : `<img class="drawer-image" src="${escapeAttr(prompt.preview)}" alt="${escapeAttr(prompt.title)} 参考图" />`}
-        <div class="drawer-type-row"><span class="prompt-type ${prompt.type === 'UI 设计' ? 'ui-type' : prompt.type === '图片提示词' ? 'image-type' : 'generic-type'}">${escapeHtml(prompt.type)}</span><span class="drawer-source">${escapeHtml(prompt.source)} · ${escapeHtml(prompt.updated)}</span></div>
+        <img id="${editing ? 'drawer-cover-preview' : ''}" class="drawer-image ${editing ? 'is-paste-target' : ''}" src="${escapeAttr(prompt.preview)}" data-preview="${escapeAttr(prompt.preview)}" alt="${escapeAttr(prompt.title)} 参考图" ${editing ? 'tabindex="0" title="编辑状态下可粘贴图片替换封面"' : ''} />
+        <div class="drawer-type-row"><span class="prompt-type ${promptTypeClass(prompt.type)}">${escapeHtml(normalizePromptType(prompt.type))}</span><span class="drawer-source">${escapeHtml(prompt.source)} · ${escapeHtml(prompt.updated)}</span></div>
         ${editing ? `<label class="drawer-title-editor"><span>标题 <em>编辑中</em></span><input id="drawer-title" value="${escapeAttr(prompt.title)}" placeholder="输入标题" /></label>` : `<h3 class="drawer-title">${escapeHtml(prompt.title)}</h3>`}
         ${editing ? `<label class="drawer-tag-editor"><span>标签 <em>编辑中</em></span><input id="drawer-tags" value="${escapeAttr(tagsToInputValue(prompt.tags))}" placeholder="例如：UI 设计，参考图" /><small>逗号、顿号或竖线分隔，保存时自动去重。</small></label>` : `<div class="drawer-tags">${normalizeTags(prompt.tags).map((tag) => `<span class="prompt-tag">${escapeHtml(tag)}</span>`).join('')}</div>`}
         <label class="drawer-editor"><span>完整提示词 ${editing ? '<em>编辑中</em>' : ''}</span><textarea id="drawer-editor" ${editing ? '' : 'readonly'}>${escapeHtml(prompt.prompt)}</textarea></label>
@@ -863,7 +875,7 @@ function getFilteredPrompts() {
     const matchesSearch = !state.search || haystack.includes(state.search.toLowerCase());
     const matchesFolder = promptMatchesLibraryFilter(prompt, state.libraryFilter);
     const matchesTag = promptHasTag(prompt, state.selectedTag);
-    const matchesType = state.typeFilter === '全部类型' || prompt.type === state.typeFilter;
+    const matchesType = state.typeFilter === '全部类型' || normalizePromptType(prompt.type) === state.typeFilter;
     return matchesSearch && matchesFolder && matchesTag && matchesType;
   });
   return filtered.sort((a, b) => {
@@ -962,24 +974,24 @@ function bindEvents() {
   document.querySelector('#analysis-editor')?.addEventListener('input', (event) => {
     state.analysis.promptByTarget[state.analysis.target] = event.target.value;
   });
-  document.querySelector('#drawer-cover-file')?.addEventListener('change', (event) => {
-    const file = event.target.files?.[0];
+  document.querySelector('.prompt-drawer')?.addEventListener('paste', (event) => {
+    if (!state.drawerEditing) return;
+    const item = [...(event.clipboardData?.items || [])].find((entry) => entry.type.startsWith('image/'));
+    if (!item) return;
+    const file = item.getAsFile();
     if (!file) return;
-    if (!file.type.startsWith('image/')) return showToast('请选择图片文件', 'triangle-alert');
     if (file.size > 2 * 1024 * 1024) return showToast('封面图片请控制在 2MB 内', 'triangle-alert');
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = String(reader.result || '');
       const preview = document.querySelector('#drawer-cover-preview');
-      const input = document.querySelector('#drawer-cover-url');
-      if (preview) preview.src = dataUrl;
-      if (input) input.value = dataUrl;
+      if (!preview) return;
+      preview.src = dataUrl;
+      preview.dataset.preview = dataUrl;
+      showToast('封面已替换，保存后生效', 'image');
     };
     reader.readAsDataURL(file);
-  });
-  document.querySelector('#drawer-cover-url')?.addEventListener('input', (event) => {
-    const value = event.target.value.trim();
-    if (value) document.querySelector('#drawer-cover-preview')?.setAttribute('src', value);
+    event.preventDefault();
   });
   document.querySelector('#prd-input')?.addEventListener('input', (event) => { state.analysis.note = event.target.value; });
   document.querySelector('#prototype-url')?.addEventListener('input', (event) => { state.analysis.note = event.target.value; });
@@ -1473,7 +1485,7 @@ function normalizeImportedPrompt(record, index) {
   const title = String(record.title || record.name || `导入提示词 ${index + 1}`).trim();
   const prompt = String(record.prompt || record.content || record.description || '').trim();
   if (!prompt) return null;
-  const type = ['提示词', 'UI 设计', '图片提示词'].includes(record.type) ? record.type : '提示词';
+  const type = normalizePromptType(record.type);
   const tags = normalizeTags(record.tags);
   return {
     id: `${Date.now()}-${index}`,
@@ -1485,7 +1497,7 @@ function normalizeImportedPrompt(record, index) {
     status: '全部',
     updated: '刚刚',
     source: '文件导入',
-    preview: type === 'UI 设计' ? referenceImages.library : referenceImages.collector,
+    preview: type === 'UI提示词' ? referenceImages.library : referenceImages.collector,
     prompt,
     favorite: Boolean(record.favorite),
   };
@@ -1616,8 +1628,8 @@ function handleAction(action, element, event) {
     if (editor) prompt.prompt = editor.value.trim() || prompt.prompt;
     const titleEditor = document.querySelector('#drawer-title');
     if (titleEditor) prompt.title = titleEditor.value.trim() || prompt.title;
-    const coverEditor = document.querySelector('#drawer-cover-url');
-    if (coverEditor?.value.trim()) prompt.preview = coverEditor.value.trim();
+    const coverPreview = document.querySelector('#drawer-cover-preview');
+    if (coverPreview?.dataset.preview) prompt.preview = coverPreview.dataset.preview;
     const tagEditor = document.querySelector('#drawer-tags');
     if (tagEditor) prompt.tags = normalizeTags(tagEditor.value);
     prompt.updated = '刚刚';
@@ -1685,7 +1697,7 @@ function handleAction(action, element, event) {
       existing.updated = '刚刚';
     } else {
       const id = Date.now();
-      state.prompts.unshift({ id, createdAt: Date.now(), title, type: 'UI 设计', folder: '产品界面', tags: ['#UI 设计', '#截图分析'], status: '常用', updated: '刚刚', source: 'UI 分析', preview: persistablePreview(state.analysis.assetPreview), prompt: content, favorite: true });
+      state.prompts.unshift({ id, createdAt: Date.now(), title, type: 'UI提示词', folder: '产品界面', tags: ['#UI 设计', '#截图分析'], status: '常用', updated: '刚刚', source: 'UI 分析', preview: persistablePreview(state.analysis.assetPreview), prompt: content, favorite: true });
       state.analysis.savedPromptId = id;
     }
     persistPrompts();
@@ -1729,17 +1741,17 @@ function openCaptureModal() {
       <div class="modal-head"><div><span class="eyebrow">QUICK CAPTURE</span><h2 id="capture-modal-title">快速收录</h2></div><button class="icon-button" data-modal-action="close" title="关闭">${icon('x', 17)}</button></div>
       <div class="modal-body">
         <p class="capture-helper">粘贴文字或图片，先收录，之后再整理。</p>
+        <div class="capture-image-box" id="capture-image-box">
+          <div class="capture-image-empty">${icon('image-plus', 18)}<strong>封面图</strong><span>粘贴图片作为封面，再次粘贴会直接替换</span></div>
+          <img id="capture-image-preview" alt="已添加封面" hidden />
+          <button class="icon-button capture-image-remove" data-modal-action="remove-image" title="删除封面" hidden>${icon('trash-2', 14)}</button>
+        </div>
         <div class="capture-title-row"><label class="field-label">标题<input id="capture-title" placeholder="可留空，让 AI 生成" /></label><button class="outline-button capture-ai-button" data-modal-action="ai-title">${icon('wand-sparkles', 14)}<span>AI 标题</span></button></div>
-        <label class="field-label">类型<select id="capture-type"><option>提示词</option><option>UI 设计</option><option>图片提示词</option></select></label>
+        <label class="field-label">类型<select id="capture-type">${promptTypes.map((type) => `<option>${type}</option>`).join('')}</select></label>
         <label class="field-label">标签（可选）<input id="capture-tags" list="capture-tag-suggestions" placeholder="例如：UI 设计，参考图" /></label>
         <datalist id="capture-tag-suggestions">${getTagStats().map(({ tag }) => `<option value="${escapeAttr(tag.replace(/^#/, ''))}"></option>`).join('')}</datalist>
         <div class="field-hint">用逗号、顿号或竖线分隔；保存时自动补 # 并合并重复标签。</div>
         <label class="field-label">内容<textarea id="capture-body" placeholder="粘贴你想复用的提示词..."></textarea></label>
-        <div class="capture-image-box" id="capture-image-box">
-          <div class="capture-image-empty">${icon('image-plus', 18)}<strong>添加参考图片</strong><span>粘贴图片，或上传 2MB 内图片</span><label class="capture-upload-button">上传图片<input id="capture-image-file" type="file" accept="image/*" hidden /></label></div>
-          <img id="capture-image-preview" alt="已添加图片" hidden />
-          <button class="icon-button capture-image-remove" data-modal-action="remove-image" title="删除图片" hidden>${icon('trash-2', 14)}</button>
-        </div>
         <label class="field-label">来源链接（可选）<input id="capture-source" value="${escapeAttr(window.location.href)}" placeholder="https://..." /></label>
       </div>
       <div class="modal-actions capture-actions"><button class="outline-button" data-modal-action="copy">${icon('copy', 15)}<span>只复制</span></button><button class="primary-button" data-modal-action="save">${icon('bookmark-plus', 15)}<span>加入提示词库</span></button></div>
@@ -1780,9 +1792,6 @@ function openCaptureModal() {
     readCaptureImageFile(file);
     event.preventDefault();
   });
-  modal.querySelector('#capture-image-file')?.addEventListener('change', (event) => {
-    readCaptureImageFile(event.target.files?.[0]);
-  });
   removeImage.addEventListener('click', () => updateImage(''));
   modal.querySelector('[data-modal-action="ai-title"]')?.addEventListener('click', () => {
     const value = titleFromText(body.value || (imageData ? '图片灵感收录' : ''));
@@ -1800,7 +1809,7 @@ function openCaptureModal() {
     const capture = {
       id: Date.now(),
       createdAt: Date.now(),
-      type: imageData ? '图片提示词' : modal.querySelector('#capture-type').value,
+      type: normalizePromptType(modal.querySelector('#capture-type').value),
       title: title.value.trim(),
       content: content || '已粘贴参考图片',
       preview: imageData,

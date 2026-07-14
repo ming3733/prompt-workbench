@@ -4,6 +4,7 @@ const PENDING_CAPTURE_KEY = 'promptly-pending-capture-v1';
 const pageTitle = document.querySelector('#page-title');
 const pageUrl = document.querySelector('#page-url');
 const title = document.querySelector('#title');
+const type = document.querySelector('#type');
 const tags = document.querySelector('#tags');
 const content = document.querySelector('#content');
 const imageBox = document.querySelector('#image-box');
@@ -57,6 +58,15 @@ function tagsToInputValue(value) {
   return normalizeTags(value, []).map((tag) => tag.replace(/^#/, '')).join('，');
 }
 
+function normalizePromptType(value, kind = 'text') {
+  const raw = String(value || '').replace(/\s+/g, '').toLowerCase();
+  if (raw.includes('图片') || raw.includes('image')) return '图片提示词';
+  if (raw.includes('icon') || raw.includes('图标')) return 'icon提示词';
+  if (raw.includes('视频') || raw.includes('video')) return '视频提示词';
+  if (raw.includes('ui') || raw.includes('界面') || raw.includes('设计') || raw.includes('提示词') || raw.includes('描述词')) return 'UI提示词';
+  return kind === 'image' ? '图片提示词' : 'UI提示词';
+}
+
 function setSource(source = {}) {
   currentSource = {
     title: source.title || '浏览器收录',
@@ -86,6 +96,7 @@ function applyCaptureDraft(capture) {
   setSource({ title: capture.sourceTitle || '浏览器收录', url: capture.sourceUrl || '' });
   content.value = capture.content || capture.text || '';
   title.value = compactTitle(capture.title || content.value, capture.kind === 'image' ? '网页参考图片' : '网页提示词收录');
+  type.value = normalizePromptType(capture.type, capture.kind);
   tags.value = tagsToInputValue(capture.tags || []);
   setImage(capture.preview || capture.image || '');
   selectionHint.textContent = capture.kind === 'image'
@@ -156,7 +167,7 @@ collectButton.addEventListener('click', () => {
     capture: {
       id: `popup-${Date.now()}`,
       kind: imageData ? 'image' : 'text',
-      type: imageData ? '图片提示词' : '提示词',
+      type: normalizePromptType(type.value, imageData ? 'image' : 'text'),
       title: title.value.trim() || suggestedTitle(text),
       content: text || '已粘贴参考图片',
       preview: imageData,

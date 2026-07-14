@@ -1934,10 +1934,6 @@ function openCaptureModal() {
   };
   modal.querySelectorAll('[data-modal-action="close"]').forEach((button) => button.addEventListener('click', () => modal.remove()));
   modal.addEventListener('click', (event) => {
-    if (event.target === modal) {
-      modal.remove();
-      return;
-    }
     if (!event.target.closest('.custom-select')) typeSelect.close();
   });
   modal.addEventListener('paste', (event) => {
@@ -2002,7 +1998,6 @@ function openAccountModal() {
   document.body.appendChild(modal);
   createIcons({ icons });
   modal.querySelectorAll('[data-modal-action="close"]').forEach((button) => button.addEventListener('click', () => modal.remove()));
-  modal.addEventListener('click', (event) => { if (event.target === modal) modal.remove(); });
   modal.querySelector('[data-modal-action="login"]')?.addEventListener('click', () => {
     const email = modal.querySelector('#account-email').value.trim();
     if (!/^\S+@\S+\.\S+$/.test(email)) return showToast('请输入有效的邮箱地址', 'triangle-alert');
@@ -2062,7 +2057,6 @@ function openWorkspaceModal() {
   document.body.appendChild(modal);
   createIcons({ icons });
   modal.querySelectorAll('[data-modal-action="close"]').forEach((button) => button.addEventListener('click', () => modal.remove()));
-  modal.addEventListener('click', (event) => { if (event.target === modal) modal.remove(); });
   modal.querySelectorAll('[data-workspace-id]').forEach((button) => button.addEventListener('click', () => {
     const id = button.dataset.workspaceId;
     modal.remove();
@@ -2105,7 +2099,6 @@ function openFolderModal() {
   document.body.appendChild(modal);
   createIcons({ icons });
   modal.querySelectorAll('[data-modal-action="close"]').forEach((button) => button.addEventListener('click', () => modal.remove()));
-  modal.addEventListener('click', (event) => { if (event.target === modal) modal.remove(); });
   modal.querySelector('[data-modal-action="save"]')?.addEventListener('click', () => {
     const name = modal.querySelector('#folder-name').value.trim();
     if (!name) return showToast('请输入文件夹名称', 'info');

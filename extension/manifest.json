@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "小明提示词收录",
+  "version": "0.1.0",
+  "description": "把网页里看到的提示词快速收录到小明提示词工作台。",
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "scripting",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://localhost:5197/*",
+    "http://127.0.0.1:5197/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost:5197/*",
+        "http://127.0.0.1:5197/*"
+      ],
+      "js": [
+        "content-script.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "小明提示词收录",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/sparkle-highlight16.png",
+      "32": "icons/sparkle-highlight32.png",
+      "48": "icons/sparkle-highlight48.png",
+      "128": "icons/sparkle-highlight128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/sparkle-highlight16.png",
+    "32": "icons/sparkle-highlight32.png",
+    "48": "icons/sparkle-highlight48.png",
+    "128": "icons/sparkle-highlight128.png"
+  },
+  "commands": {
+    "collect-selection": {
+      "suggested_key": {
+        "default": "Alt+Shift+P"
+      },
+      "description": "收录当前选中的提示词"
+    }
+  }
+}

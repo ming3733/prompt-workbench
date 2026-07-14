@@ -359,6 +359,7 @@ const state = {
   folders: [...initialWorkspace.folders],
   account: loadStoredObject(accountStorageKey),
   incomingCapture: Boolean(incomingCapture),
+  hasRendered: false,
   analysis: {
     source: '截图',
     hasAsset: true,
@@ -492,7 +493,7 @@ function icon(name, size = 16) {
 
 function render() {
   app.innerHTML = `
-    <div class="app-shell">
+    <div class="app-shell ${state.hasRendered ? 'has-rendered' : 'is-entering'}">
       ${renderTopbar()}
       <div class="app-body">
         ${renderSidebar()}
@@ -508,6 +509,7 @@ function render() {
   `;
   createIcons({ icons });
   bindEvents();
+  state.hasRendered = true;
 }
 
 function renderMainView() {

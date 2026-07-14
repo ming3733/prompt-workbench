@@ -172,8 +172,17 @@ function tagsToInputValue(tags) {
   return normalizeTags(tags).map((tag) => tag.replace(/^#/, '')).join('，');
 }
 
+const imageExtractionGuidance = '请提取这张图片的构图、主体、色彩、材质和光影特征，整理成可复用的图片生成提示词。';
+
+function sanitizePromptContent(value) {
+  return String(value || '')
+    .replaceAll(imageExtractionGuidance, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function clonePrompts(prompts) {
-  return (Array.isArray(prompts) ? prompts : []).map((prompt) => ({ ...prompt, type: normalizePromptType(prompt.type), tags: normalizeTags(prompt.tags) }));
+  return (Array.isArray(prompts) ? prompts : []).map((prompt) => ({ ...prompt, type: normalizePromptType(prompt.type), tags: normalizeTags(prompt.tags), prompt: sanitizePromptContent(prompt.prompt) }));
 }
 
 function normalizeWorkspace(workspace, index = 0) {
@@ -267,9 +276,10 @@ function promptFromCapture(capture) {
   const sourceUrl = String(capture.sourceUrl || '').trim();
   if (!content && !sourceUrl) return null;
   const type = normalizePromptType(capture.type, capture.kind);
-  const prompt = type === '图片提示词'
-    ? `参考图片：${content}\n\n请提取这张图片的构图、主体、色彩、材质和光影特征，整理成可复用的图片生成提示词。`
+  const rawPrompt = type === '图片提示词'
+    ? `参考图片：${content}`
     : content || `收录页面：${capture.sourceTitle || sourceUrl}`;
+  const prompt = sanitizePromptContent(rawPrompt);
   return {
     id: capture.id || Date.now(),
     createdAt: Date.now(),
@@ -608,6 +618,7 @@ function renderLibrary() {
 }
 
 function renderPromptCard(prompt) {
+  const promptContent = sanitizePromptContent(prompt.prompt);
   return `
     <article class="prompt-card ${samePromptId(state.selectedPromptId, prompt.id) ? 'is-focused' : ''} ${isPromptSelected(prompt.id) ? 'is-selected' : ''}" data-prompt-id="${escapeAttr(prompt.id)}">
       <div class="card-topline">
@@ -616,7 +627,7 @@ function renderPromptCard(prompt) {
       </div>
       <button class="card-main" data-open-prompt="${escapeAttr(prompt.id)}">
         <div class="card-title-line"><h2>${escapeHtml(prompt.title)}</h2><span class="favorite-button ${prompt.favorite ? 'is-favorite' : ''}" data-favorite="${escapeAttr(prompt.id)}" role="button" title="${prompt.favorite ? '取消常用' : '加入常用'}">${icon(prompt.favorite ? 'star' : 'star', 16)}</span></div>
-        <p class="prompt-excerpt">${escapeHtml(prompt.prompt)}</p>
+        <p class="prompt-excerpt">${escapeHtml(promptContent)}</p>
         <div class="prompt-preview-wrap"><img src="${escapeAttr(prompt.preview)}" alt="${escapeAttr(prompt.title)} 参考图" /><span class="preview-overlay">${icon('scan-search', 15)}<span>查看来源</span></span></div>
       </button>
       <div class="card-footer">
@@ -849,6 +860,7 @@ function renderPromptDrawer() {
   const prompt = findPrompt(state.selectedPromptId);
   if (!prompt) return '';
   const editing = state.drawerEditing;
+  const promptContent = sanitizePromptContent(prompt.prompt);
   return `
     <div class="drawer-backdrop" data-action="close-drawer"></div>
     <aside class="prompt-drawer">
@@ -858,7 +870,7 @@ function renderPromptDrawer() {
         <div class="drawer-type-row"><span class="prompt-type ${promptTypeClass(prompt.type)}">${escapeHtml(normalizePromptType(prompt.type))}</span><span class="drawer-source">${escapeHtml(prompt.source)} · ${escapeHtml(prompt.updated)}</span></div>
         ${editing ? `<label class="drawer-title-editor"><span>标题 <em>编辑中</em></span><input id="drawer-title" value="${escapeAttr(prompt.title)}" placeholder="输入标题" /></label>` : `<h3 class="drawer-title">${escapeHtml(prompt.title)}</h3>`}
         ${editing ? `<label class="drawer-tag-editor"><span>标签 <em>编辑中</em></span><input id="drawer-tags" value="${escapeAttr(tagsToInputValue(prompt.tags))}" placeholder="例如：UI 设计，参考图" /><small>逗号、顿号或竖线分隔，保存时自动去重。</small></label>` : `<div class="drawer-tags">${normalizeTags(prompt.tags).map((tag) => `<span class="prompt-tag">${escapeHtml(tag)}</span>`).join('')}</div>`}
-        <label class="drawer-editor"><span>完整提示词 ${editing ? '<em>编辑中</em>' : ''}</span><textarea id="drawer-editor" ${editing ? '' : 'readonly'}>${escapeHtml(prompt.prompt)}</textarea></label>
+        <label class="drawer-editor"><span>完整提示词 ${editing ? '<em>编辑中</em>' : ''}</span><textarea id="drawer-editor" ${editing ? '' : 'readonly'}>${escapeHtml(promptContent)}</textarea></label>
         <div class="drawer-note">${icon('info', 14)}<span>复制后可直接粘贴到 Codex、Figma Make 或图片生成工具。</span></div>
       </div>
       <div class="drawer-actions"><button class="danger-button" data-action="delete-prompt">${icon('trash-2', 15)}<span>删除</span></button><button class="outline-button" data-action="edit-prompt">${icon(editing ? 'save' : 'pencil', 15)}<span>${editing ? '保存修改' : '编辑'}</span></button><button class="primary-button" data-copy-prompt="${prompt.id}">${icon('copy', 15)}<span>复制提示词</span></button></div>
@@ -939,7 +951,7 @@ function bindEvents() {
   document.querySelectorAll('[data-copy-prompt]').forEach((button) => button.addEventListener('click', (event) => {
     event.stopPropagation();
     const prompt = findPrompt(button.dataset.copyPrompt);
-    copyText(prompt?.prompt || '', '提示词已复制');
+    copyText(sanitizePromptContent(prompt?.prompt), '提示词已复制');
   }));
   document.querySelectorAll('[data-favorite]').forEach((button) => button.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -1587,7 +1599,7 @@ function handleAction(action, element, event) {
   if (action === 'copy-selected') {
     const selected = state.prompts.filter((prompt) => isPromptSelected(prompt.id));
     if (!selected.length) return showToast('请先选择提示词', 'info');
-    copyText(selected.map((prompt) => `${prompt.title}\n${prompt.prompt}`).join('\n\n'), `已复制 ${selected.length} 条提示词`);
+    copyText(selected.map((prompt) => `${prompt.title}\n${sanitizePromptContent(prompt.prompt)}`).join('\n\n'), `已复制 ${selected.length} 条提示词`);
     return;
   }
   if (action === 'sort-prompts') {
@@ -1633,7 +1645,7 @@ function handleAction(action, element, event) {
       return;
     }
     const editor = document.querySelector('#drawer-editor');
-    if (editor) prompt.prompt = editor.value.trim() || prompt.prompt;
+    if (editor) prompt.prompt = sanitizePromptContent(editor.value.trim()) || prompt.prompt;
     const titleEditor = document.querySelector('#drawer-title');
     if (titleEditor) prompt.title = titleEditor.value.trim() || prompt.title;
     const coverPreview = document.querySelector('#drawer-cover-preview');
@@ -1807,12 +1819,12 @@ function openCaptureModal() {
     showToast('已生成标题', 'wand-sparkles');
   });
   modal.querySelector('[data-modal-action="copy"]')?.addEventListener('click', () => {
-    const content = body.value.trim();
+    const content = sanitizePromptContent(body.value.trim());
     if (!content) return showToast('请先粘贴提示词文字', 'info');
     copyText(content, '提示词已复制');
   });
   modal.querySelector('[data-modal-action="save"]')?.addEventListener('click', () => {
-    const content = body.value.trim();
+    const content = sanitizePromptContent(body.value.trim());
     if (!content && !imageData) return showToast('请先粘贴文字或图片', 'info');
     const capture = {
       id: Date.now(),

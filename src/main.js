@@ -340,6 +340,7 @@ const state = {
     assetIsImage: true,
     analyzing: false,
     completed: true,
+    engine: 'local',
     target: 'Codex',
     saved: false,
     savedPromptId: null,
@@ -640,6 +641,7 @@ function renderEmptyState() {
 function renderAnalyzer() {
   const a = state.analysis;
   const profile = getAnalysisProfile();
+  const analyzerStatus = a.analyzing ? '正在分析' : a.completed ? (a.engine === 'deepseek' ? 'DeepSeek 已完成' : '本地分析已完成') : '等待素材';
   return `
     <section class="page-view analyzer-view">
       <div class="page-heading analyzer-heading">
@@ -648,7 +650,7 @@ function renderAnalyzer() {
           <h1>UI 分析</h1>
           <p class="page-description">上传截图、原型或 PRD，让界面规则变成 Codex 和 Figma Make 能直接理解的提示词。</p>
         </div>
-        <div class="analyzer-state ${a.completed ? 'is-done' : ''}">${icon(a.completed ? 'check-circle-2' : 'sparkles', 16)}<span>${a.completed ? '分析已完成' : '等待素材'}</span></div>
+        <div class="analyzer-state ${a.completed ? 'is-done' : ''}">${icon(a.completed ? (a.engine === 'deepseek' ? 'sparkles' : 'check-circle-2') : 'sparkles', 16)}<span>${analyzerStatus}</span></div>
       </div>
       <div class="analyzer-workspace">
         <div class="source-panel panel">
@@ -672,7 +674,7 @@ function renderAnalyzer() {
             ${['Codex', 'Figma Make', '通用'].map((item) => `<button class="target-option ${a.target === item ? 'is-active' : ''}" data-target="${item}">${item === 'Codex' ? icon('code-2', 14) : item === 'Figma Make' ? icon('figma', 14) : icon('sparkles', 14)}<span>${item}</span></button>`).join('')}
           </div>
           <div class="analysis-summary">
-            <div class="summary-title"><span class="summary-dot"></span><strong>${escapeHtml(profile.title)}</strong><span class="summary-time">${a.completed ? '刚刚' : '待分析'}</span></div>
+            <div class="summary-title"><span class="summary-dot"></span><strong>${escapeHtml(profile.title)}</strong><span class="summary-time">${a.completed ? (a.engine === 'deepseek' ? 'DeepSeek' : '本地') : '待分析'}</span></div>
             <div class="summary-chips">${profile.chips.map((chip) => `<span>${escapeHtml(chip)}</span>`).join('')}</div>
           </div>
           <label class="prompt-editor-wrap">
@@ -1021,6 +1023,7 @@ function createAnalysisState(overrides = {}) {
     assetIsImage: true,
     analyzing: false,
     completed: false,
+    engine: 'local',
     target: 'Codex',
     saved: false,
     savedPromptId: null,
@@ -1047,6 +1050,7 @@ async function runAnalysis() {
   const currentSource = state.analysis.source;
   state.analysis.analyzing = true;
   state.analysis.completed = false;
+  state.analysis.engine = 'local';
   render();
   try {
     const [profile] = await Promise.all([createAnalysisProfileFromInput(), wait(520)]);
@@ -1057,6 +1061,7 @@ async function runAnalysis() {
     state.analysis.promptByTarget = deepSeekPromptSet || createPromptSetFromProfile(profile);
     state.analysis.analyzing = false;
     state.analysis.completed = true;
+    state.analysis.engine = deepSeekPromptSet ? 'deepseek' : 'local';
     state.analysis.saved = false;
     state.analysis.savedPromptId = null;
     render();

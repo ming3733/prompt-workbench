@@ -5,12 +5,13 @@ const assetBase = import.meta.env.BASE_URL || './';
 const publicAsset = (path) => `${assetBase}${path.replace(/^\/+/, '')}`;
 
 const referenceImages = {
+  defaultCover: publicAsset('reference/prompt-default-cover.png'),
   library: publicAsset('reference/prompt-library-reference.png'),
   mobile: publicAsset('reference/prompt-mobile-reference.png'),
   collector: publicAsset('reference/prompt-collector-reference.png'),
 };
 
-function normalizePreviewSource(preview, fallback = referenceImages.collector) {
+function normalizePreviewSource(preview, fallback = referenceImages.defaultCover) {
   const raw = String(preview || '').trim();
   if (!raw || raw.startsWith('blob:')) return fallback;
   const referencePath = raw.match(/(?:^|\/)(reference\/[^?#]+)/)?.[1];
@@ -643,7 +644,7 @@ function renderPromptCard(prompt, index = 0) {
       <button class="card-main" data-open-prompt="${escapeAttr(prompt.id)}">
         <div class="card-title-line"><h2>${escapeHtml(prompt.title)}</h2><span class="favorite-button ${prompt.favorite ? 'is-favorite' : ''}" data-favorite="${escapeAttr(prompt.id)}" role="button" title="${prompt.favorite ? '取消常用' : '加入常用'}">${icon(prompt.favorite ? 'star' : 'star', 16)}</span></div>
         <p class="prompt-excerpt">${escapeHtml(promptContent)}</p>
-        <div class="prompt-preview-wrap"><img src="${escapeAttr(preview)}" data-fallback-src="${escapeAttr(referenceImages.collector)}" alt="${escapeAttr(prompt.title)} 参考图" /><span class="preview-overlay">${icon('scan-search', 15)}<span>查看来源</span></span></div>
+        <div class="prompt-preview-wrap"><img src="${escapeAttr(preview)}" data-fallback-src="${escapeAttr(referenceImages.defaultCover)}" alt="${escapeAttr(prompt.title)} 参考图" /><span class="preview-overlay">${icon('scan-search', 15)}<span>查看来源</span></span></div>
       </button>
       <div class="card-footer">
         <div class="card-meta"><span>${icon('link-2', 13)}${escapeHtml(prompt.source)}</span><span>${escapeHtml(prompt.updated)}</span></div>
@@ -882,7 +883,7 @@ function renderPromptDrawer() {
     <aside class="prompt-drawer">
       <div class="drawer-head"><div><span class="eyebrow">PROMPT DETAIL</span><h2>提示词详情</h2></div><button class="icon-button" data-action="close-drawer" title="关闭详情">${icon('x', 17)}</button></div>
       <div class="drawer-scroll">
-        <img id="${editing ? 'drawer-cover-preview' : ''}" class="drawer-image ${editing ? 'is-paste-target' : ''}" src="${escapeAttr(preview)}" data-preview="${escapeAttr(preview)}" data-fallback-src="${escapeAttr(referenceImages.collector)}" alt="${escapeAttr(prompt.title)} 参考图" ${editing ? 'tabindex="0" title="编辑状态下可粘贴图片替换封面"' : ''} />
+        <img id="${editing ? 'drawer-cover-preview' : ''}" class="drawer-image ${editing ? 'is-paste-target' : ''}" src="${escapeAttr(preview)}" data-preview="${escapeAttr(preview)}" data-fallback-src="${escapeAttr(referenceImages.defaultCover)}" alt="${escapeAttr(prompt.title)} 参考图" ${editing ? 'tabindex="0" title="编辑状态下可粘贴图片替换封面"' : ''} />
         <div class="drawer-type-row"><span class="prompt-type ${promptTypeClass(prompt.type)}">${escapeHtml(normalizePromptType(prompt.type))}</span><span class="drawer-source">${escapeHtml(prompt.source)} · ${escapeHtml(prompt.updated)}</span></div>
         ${editing ? `<label class="drawer-title-editor"><span>标题 <em>编辑中</em></span><input id="drawer-title" value="${escapeAttr(prompt.title)}" placeholder="输入标题" /></label>` : `<h3 class="drawer-title">${escapeHtml(prompt.title)}</h3>`}
         ${editing ? `<label class="drawer-tag-editor"><span>标签 <em>编辑中</em></span><input id="drawer-tags" value="${escapeAttr(tagsToInputValue(prompt.tags))}" placeholder="例如：UI 设计，参考图" /><small>逗号、顿号或竖线分隔，保存时自动去重。</small></label>` : `<div class="drawer-tags">${normalizeTags(prompt.tags).map((tag) => `<span class="prompt-tag">${escapeHtml(tag)}</span>`).join('')}</div>`}
@@ -1427,7 +1428,7 @@ function formatFileSize(bytes) {
 }
 
 function persistablePreview(preview) {
-  return normalizePreviewSource(preview, referenceImages.library);
+  return normalizePreviewSource(preview, referenceImages.defaultCover);
 }
 
 function handleAssetFile(file) {
@@ -1545,7 +1546,7 @@ function normalizeImportedPrompt(record, index) {
     updated: '刚刚',
     source: record.source || record.sourceTitle || '文件导入',
     sourceUrl: record.sourceUrl || '',
-    preview: normalizePreviewSource(record.preview, type === 'UI提示词' ? referenceImages.library : referenceImages.collector),
+    preview: normalizePreviewSource(record.preview, referenceImages.defaultCover),
     prompt,
     favorite: Boolean(record.favorite),
   };

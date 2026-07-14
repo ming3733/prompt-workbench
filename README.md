@@ -1,4 +1,4 @@
-# Prompt Workbench
+# 小明提示词库
 
 本地优先的提示词库和 UI 分析工作台。
 

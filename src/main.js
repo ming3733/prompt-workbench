@@ -414,7 +414,7 @@ Use a fixed top bar, a compact left documentation sidebar, and a spacious three-
 Visual language: pale blue-gray canvas, white surfaces, crisp black typography, blue primary actions, thin cool-gray borders, 12px radius, subtle shadows, and calm information density.
 
 Library cards show prompt title, type, excerpt, source, tags, update date, preview image, favorite, and copy actions. UI Analysis accepts a screenshot, PRD, or prototype link and returns structured layout, content, typography, color, component, and responsive rules. Include search, filters, import/export, detail drawer, copy feedback, and add-to-library states.`,
-  通用: `设计一个面向 AI 创作者的 Prompt Workbench。包含提示词库和 UI 分析两个入口：提示词库支持关键词搜索、标签筛选、预览、复制、导入导出和新增；UI 分析支持上传截图、粘贴 PRD 或输入原型链接，输出布局、内容、色彩、字体、组件、交互与响应式规则，并可编辑、复制和加入提示词库。整体采用浅蓝灰背景、白色卡片、黑色文字、蓝色主按钮、细边框和适度圆角，桌面端三栏、移动端单列适配。`,
+  通用: `设计一个面向 AI 创作者的「小明提示词库」。包含提示词库和 UI 分析两个入口：提示词库支持关键词搜索、标签筛选、预览、复制、导入导出和新增；UI 分析支持上传截图、粘贴 PRD 或输入原型链接，输出布局、内容、色彩、字体、组件、交互与响应式规则，并可编辑、复制和加入提示词库。整体采用浅蓝灰背景、白色卡片、黑色文字、蓝色主按钮、细边框和适度圆角，桌面端三栏、移动端单列适配。`,
 };
 
 state.analysis.promptByTarget = { ...analysisPrompt };
@@ -527,8 +527,8 @@ function renderTopbar() {
       <div class="brand-lockup">
         <div class="brand-mark">${icon('sparkles', 17)}</div>
         <div>
-          <div class="brand-name">Promptly</div>
-          <div class="brand-subtitle">提示词工作台</div>
+          <div class="brand-name">小明提示词库</div>
+          <div class="brand-subtitle">AI 创作工作台</div>
         </div>
       </div>
       <nav class="primary-nav" aria-label="主导航">

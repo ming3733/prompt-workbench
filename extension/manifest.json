@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "小明提示词收录",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "把网页里看到的提示词快速收录到小明提示词工作台。",
   "permissions": [
     "activeTab",

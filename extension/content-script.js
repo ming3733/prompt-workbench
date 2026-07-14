@@ -1,4 +1,5 @@
 const QUEUED_CAPTURES_KEY = 'promptly-queued-captures-v1';
+const CAPTURE_HISTORY_KEY = 'promptly-capture-history-v1';
 const EXTENSION_SOURCE = 'promptly-extension';
 const APP_SOURCE = 'promptly-app';
 
@@ -29,6 +30,16 @@ function removeImportedCaptures(ids = []) {
   if (!importedIds.size) return;
   getQueue((queue) => {
     setQueue(queue.filter((capture) => !importedIds.has(String(capture.id))));
+  });
+  chrome.storage.local.get(CAPTURE_HISTORY_KEY, (result) => {
+    const history = Array.isArray(result?.[CAPTURE_HISTORY_KEY]) ? result[CAPTURE_HISTORY_KEY] : [];
+    chrome.storage.local.set({
+      [CAPTURE_HISTORY_KEY]: history.map((capture) => (
+        importedIds.has(String(capture.id))
+          ? { ...capture, syncedAt: capture.syncedAt || new Date().toISOString() }
+          : capture
+      )),
+    });
   });
 }
 

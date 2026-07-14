@@ -1,12 +1,14 @@
 const APP_URL = 'https://ming3733.github.io/prompt-workbench/';
 const PENDING_CAPTURE_KEY = 'promptly-pending-capture-v1';
 const QUEUED_CAPTURES_KEY = 'promptly-queued-captures-v1';
+const CAPTURE_HISTORY_KEY = 'promptly-capture-history-v1';
 const POPUP_WINDOW = { width: 380, height: 640 };
 const WORKBENCH_MATCHES = [
   'http://localhost:5197/*',
   'http://127.0.0.1:5197/*',
   'https://ming3733.github.io/prompt-workbench*',
 ];
+const ONLINE_WORKBENCH_MATCHES = ['https://ming3733.github.io/prompt-workbench*'];
 
 function createMenus() {
   chrome.contextMenus.removeAll(() => {
@@ -106,13 +108,23 @@ function setStored(value) {
 
 async function queueCapture(capture) {
   const queue = await getStored(QUEUED_CAPTURES_KEY);
+  const history = await getStored(CAPTURE_HISTORY_KEY);
   const captures = Array.isArray(queue) ? queue : [];
-  await setStored({ [QUEUED_CAPTURES_KEY]: [...captures, capture] });
+  const historyCaptures = Array.isArray(history) ? history : [];
+  const storedCapture = {
+    ...capture,
+    queuedAt: capture.queuedAt || new Date().toISOString(),
+    syncedAt: capture.syncedAt || null,
+  };
+  await setStored({
+    [QUEUED_CAPTURES_KEY]: [...captures.filter((item) => item.id !== storedCapture.id), storedCapture],
+    [CAPTURE_HISTORY_KEY]: [storedCapture, ...historyCaptures.filter((item) => item.id !== storedCapture.id)].slice(0, 1000),
+  });
 }
 
-function queryWorkbenchTabs() {
+function queryWorkbenchTabs(matches = WORKBENCH_MATCHES) {
   return new Promise((resolve) => {
-    chrome.tabs.query({ url: WORKBENCH_MATCHES }, (tabs) => resolve(Array.isArray(tabs) ? tabs : []));
+    chrome.tabs.query({ url: matches }, (tabs) => resolve(Array.isArray(tabs) ? tabs : []));
   });
 }
 
@@ -128,14 +140,14 @@ function sendFlushMessage(tabId) {
   });
 }
 
-async function notifyWorkbenchTabs() {
-  const tabs = await queryWorkbenchTabs();
+async function notifyWorkbenchTabs(matches = WORKBENCH_MATCHES) {
+  const tabs = await queryWorkbenchTabs(matches);
   const results = await Promise.all(tabs.filter((tab) => tab.id).map((tab) => sendFlushMessage(tab.id)));
   return results.some(Boolean);
 }
 
-async function openWorkbenchIfNeeded() {
-  const tabs = await queryWorkbenchTabs();
+async function openWorkbenchIfNeeded(matches = ONLINE_WORKBENCH_MATCHES) {
+  const tabs = await queryWorkbenchTabs(matches);
   const existingTab = tabs.find((tab) => tab.id);
   if (existingTab) {
     await chrome.tabs.update(existingTab.id, { active: true });
@@ -147,8 +159,45 @@ async function openWorkbenchIfNeeded() {
 }
 
 async function deliverCaptureQueue() {
-  const delivered = await notifyWorkbenchTabs();
+  const delivered = await notifyWorkbenchTabs(ONLINE_WORKBENCH_MATCHES);
   if (!delivered) await openWorkbenchIfNeeded();
+}
+
+async function getCaptureStats() {
+  const queue = await getStored(QUEUED_CAPTURES_KEY);
+  const history = await getStored(CAPTURE_HISTORY_KEY);
+  const queuedCaptures = Array.isArray(queue) ? queue : [];
+  const historyCaptures = Array.isArray(history) ? history : [];
+  return {
+    queuedCount: queuedCaptures.length,
+    historyCount: historyCaptures.length,
+    latestTitle: historyCaptures[0]?.title || '',
+    latestAt: historyCaptures[0]?.queuedAt || historyCaptures[0]?.createdAt || '',
+  };
+}
+
+async function exportCaptures() {
+  const queue = await getStored(QUEUED_CAPTURES_KEY);
+  const history = await getStored(CAPTURE_HISTORY_KEY);
+  return {
+    ok: true,
+    filename: `prompt-workbench-extension-backup-${new Date().toISOString().slice(0, 10)}.json`,
+    backup: {
+      schema: 'promptly.extension.backup.v1',
+      exportedAt: new Date().toISOString(),
+      appUrl: APP_URL,
+      queuedCaptures: Array.isArray(queue) ? queue : [],
+      historyCaptures: Array.isArray(history) ? history : [],
+    },
+  };
+}
+
+async function resyncCaptureHistory() {
+  const history = await getStored(CAPTURE_HISTORY_KEY);
+  const historyCaptures = Array.isArray(history) ? history : [];
+  await setStored({ [QUEUED_CAPTURES_KEY]: historyCaptures });
+  await deliverCaptureQueue();
+  return { ok: true, queuedCount: historyCaptures.length };
 }
 
 async function collectCurrentTab(customCapture = null) {
@@ -225,6 +274,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
   if (message?.type === 'open-workbench') {
     openWorkbenchIfNeeded().then(() => sendResponse({ ok: true })).catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+  if (message?.type === 'capture-stats') {
+    getCaptureStats().then((stats) => sendResponse({ ok: true, ...stats })).catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+  if (message?.type === 'flush-captures') {
+    deliverCaptureQueue().then(async () => sendResponse({ ok: true, ...(await getCaptureStats()) })).catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+  if (message?.type === 'export-captures') {
+    exportCaptures().then(sendResponse).catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+  if (message?.type === 'resync-history') {
+    resyncCaptureHistory().then(sendResponse).catch(() => sendResponse({ ok: false }));
     return true;
   }
   return false;

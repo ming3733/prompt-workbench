@@ -1467,7 +1467,18 @@ async function handleImportFile(file) {
       importWorkspaceCatalog(raw.workspaces);
       return;
     }
-    const records = Array.isArray(raw) ? raw : raw.prompts;
+    let records = Array.isArray(raw) ? raw : raw.prompts;
+    if (raw?.schema === 'promptly.extension.backup.v1') {
+      const seen = new Set();
+      records = [...(Array.isArray(raw.historyCaptures) ? raw.historyCaptures : []), ...(Array.isArray(raw.queuedCaptures) ? raw.queuedCaptures : [])]
+        .filter((capture) => {
+          const key = String(capture?.id || `${capture?.title || ''}-${capture?.content || capture?.prompt || ''}`);
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      state.folders = [...new Set([...state.folders, '浏览器收集箱'])];
+    }
     if (!Array.isArray(records)) throw new Error('invalid-format');
     if (Array.isArray(raw.folders)) state.folders = [...new Set([...state.folders, ...raw.folders.map(String)])];
     const imported = records.map((record, index) => normalizeImportedPrompt(record, index)).filter(Boolean);
@@ -1528,12 +1539,13 @@ function normalizeImportedPrompt(record, index) {
     createdAt: Date.now() + index,
     title,
     type,
-    folder: state.folders.includes(record.folder) ? record.folder : '未整理',
+    folder: state.folders.includes(record.folder) ? record.folder : (record.sourceTitle || record.sourceUrl ? '浏览器收集箱' : '未整理'),
     tags,
     status: '全部',
     updated: '刚刚',
-    source: '文件导入',
-    preview: type === 'UI提示词' ? referenceImages.library : referenceImages.collector,
+    source: record.source || record.sourceTitle || '文件导入',
+    sourceUrl: record.sourceUrl || '',
+    preview: normalizePreviewSource(record.preview, type === 'UI提示词' ? referenceImages.library : referenceImages.collector),
     prompt,
     favorite: Boolean(record.favorite),
   };

@@ -34,11 +34,17 @@ input:focus, textarea:focus, select:focus { border-color: #83b8ef; box-shadow: 0
 .remove-image { position: absolute; top: 7px; right: 7px; min-height: 26px; padding: 0 8px; border: 1px solid #f1caca; border-radius: 6px; color: #c54c4c; background: rgba(255, 255, 255, .94); font-size: 10px; }
 .remove-image:hover { background: #fff0f0; }
 button { cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; }
-.primary, .secondary { width: 100%; min-height: 35px; border-radius: 8px; }
+.primary, .secondary, .ghost { width: 100%; min-height: 35px; border-radius: 8px; }
 .primary { color: #fff; border: 0; background: #0d7be8; }
 .primary:hover { background: #075dbc; }
 .primary:disabled { cursor: wait; opacity: .7; }
 .secondary { color: #677284; border: 1px solid #e5eaf1; background: #fff; }
 .secondary:hover { color: #0d7be8; border-color: #afd0f4; }
+.ghost { color: #0d7be8; border: 1px dashed #afd0f4; background: #eef5ff; }
+.ghost:hover { background: #e5f1ff; }
+.sync-panel { display: grid; gap: 8px; padding: 9px; border: 1px solid #e5eaf1; border-radius: 10px; background: #fff; }
+.sync-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sync-status strong { color: #1d2530; font-size: 11px; }
+.sync-status span { color: #99a4b4; font-size: 10px; }
 .hint { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.5; text-align: center; }
 .message { min-height: 15px; color: #1bb86e; font-size: 10px; text-align: center; }

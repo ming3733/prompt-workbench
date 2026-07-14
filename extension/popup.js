@@ -14,12 +14,49 @@ const removeImage = document.querySelector('#remove-image');
 const selectionHint = document.querySelector('#selection-hint');
 const message = document.querySelector('#message');
 const collectButton = document.querySelector('#collect');
+const syncButton = document.querySelector('#sync');
+const backupButton = document.querySelector('#backup');
+const queuedCount = document.querySelector('#queued-count');
+const historyCount = document.querySelector('#history-count');
 let imageData = '';
 let currentSource = { title: '', url: '' };
 
 function setMessage(text, isError = false) {
   message.textContent = text;
   message.style.color = isError ? '#c54c4c' : '#1bb86e';
+}
+
+function sendRuntimeMessage(payload) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(payload, (result) => {
+      if (chrome.runtime.lastError) return resolve({ ok: false, message: chrome.runtime.lastError.message });
+      resolve(result || { ok: false });
+    });
+  });
+}
+
+async function copyText(value) {
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    const textarea = document.createElement('textarea');
+    textarea.value = value;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const ok = document.execCommand('copy');
+    textarea.remove();
+    return ok;
+  }
+}
+
+async function refreshSyncStatus() {
+  const stats = await sendRuntimeMessage({ type: 'capture-stats' });
+  if (!stats.ok) return;
+  queuedCount.textContent = `待同步 ${stats.queuedCount || 0} 条`;
+  historyCount.textContent = `本机已保存 ${stats.historyCount || 0} 条`;
 }
 
 function compactTitle(value, fallback = '网页提示词收录') {
@@ -129,6 +166,7 @@ function initializePopup() {
     }
     requestActiveContext();
   });
+  refreshSyncStatus();
 }
 
 document.addEventListener('paste', (event) => {
@@ -161,7 +199,7 @@ collectButton.addEventListener('click', () => {
     return;
   }
   collectButton.disabled = true;
-  collectButton.textContent = '正在录入...';
+  collectButton.textContent = '正在保存...';
   chrome.runtime.sendMessage({
     type: 'collect-current',
     capture: {
@@ -182,8 +220,10 @@ collectButton.addEventListener('click', () => {
       collectButton.textContent = '加入提示词库';
       return;
     }
-    setMessage('已录入提示库');
-    collectButton.textContent = '已录入提示库';
+    setMessage(result.queued ? '已保存在插件本机，正在同步线上库' : '已保存');
+    collectButton.disabled = false;
+    collectButton.textContent = '已保存，可继续收录';
+    refreshSyncStatus();
   });
 });
 
@@ -191,6 +231,27 @@ document.querySelector('#open').addEventListener('click', () => {
   chrome.runtime.sendMessage({ type: 'open-workbench' }, (result) => {
     if (chrome.runtime.lastError || !result?.ok) chrome.tabs.create({ url: APP_URL });
   });
+});
+
+syncButton.addEventListener('click', async () => {
+  syncButton.disabled = true;
+  syncButton.textContent = '同步中...';
+  const result = await sendRuntimeMessage({ type: 'flush-captures' });
+  if (!result.ok) setMessage('同步失败，请先打开线上提示词库。', true);
+  else setMessage((result.queuedCount || 0) ? `已打开线上库，待网页确认 ${result.queuedCount} 条` : '已同步完成');
+  syncButton.disabled = false;
+  syncButton.textContent = '同步到线上库';
+  refreshSyncStatus();
+});
+
+backupButton.addEventListener('click', async () => {
+  const result = await sendRuntimeMessage({ type: 'export-captures' });
+  if (!result.ok) {
+    setMessage('备份生成失败，请重试。', true);
+    return;
+  }
+  const ok = await copyText(JSON.stringify(result.backup, null, 2));
+  setMessage(ok ? '备份 JSON 已复制，可粘贴保存到文件。' : '复制失败，请重试。', !ok);
 });
 
 initializePopup();

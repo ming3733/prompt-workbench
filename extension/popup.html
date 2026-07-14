@@ -15,8 +15,13 @@
       <label class="field"><span>标签</span><input id="tags" placeholder="例如：UI 设计，参考图" /><small class="field-note">逗号/顿号分隔，自动去重</small></label>
       <label class="field"><span>内容</span><textarea id="content" placeholder="输入或粘贴提示词..."></textarea></label>
       <div class="image-box" id="image-box"><div class="image-empty"><span>图片</span><small>粘贴图片；已有图片会替换</small></div><img id="image-preview" alt="已粘贴图片" hidden /><button class="remove-image" id="remove-image" title="删除图片" hidden>删除图片</button></div>
-      <button class="primary" id="collect">加入提示词库</button>
-      <button class="secondary" id="open">打开提示词库</button>
+      <button class="primary" id="collect">保存并同步到提示词库</button>
+      <div class="sync-panel">
+        <div class="sync-status"><strong id="queued-count">待同步 0 条</strong><span id="history-count">本机已保存 0 条</span></div>
+        <button class="secondary" id="sync">同步到线上库</button>
+        <button class="secondary" id="open">打开线上提示词库</button>
+        <button class="ghost" id="backup">复制备份 JSON</button>
+      </div>
       <p class="hint" id="selection-hint">当前网页：读取中...</p>
       <div class="message" id="message" role="status"></div>
     </main>

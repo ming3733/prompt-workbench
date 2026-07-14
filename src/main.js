@@ -631,11 +631,11 @@ function renderLibrary() {
   `;
 }
 
-function renderPromptCard(prompt) {
+function renderPromptCard(prompt, index = 0) {
   const promptContent = sanitizePromptContent(prompt.prompt);
   const preview = normalizePreviewSource(prompt.preview);
   return `
-    <article class="prompt-card ${samePromptId(state.selectedPromptId, prompt.id) ? 'is-focused' : ''} ${isPromptSelected(prompt.id) ? 'is-selected' : ''}" data-prompt-id="${escapeAttr(prompt.id)}">
+    <article class="prompt-card ${samePromptId(state.selectedPromptId, prompt.id) ? 'is-focused' : ''} ${isPromptSelected(prompt.id) ? 'is-selected' : ''}" data-prompt-id="${escapeAttr(prompt.id)}" style="--card-index:${Math.min(index, 12)}">
       <div class="card-topline">
         ${state.selectMode ? `<label class="check-wrap"><input type="checkbox" aria-label="选择 ${escapeAttr(prompt.title)}" ${isPromptSelected(prompt.id) ? 'checked' : ''} /><span></span></label>` : ''}
         <span class="prompt-type ${promptTypeClass(prompt.type)}">${escapeHtml(normalizePromptType(prompt.type))}</span>
@@ -719,7 +719,7 @@ function renderAnalyzer() {
       <div class="analysis-breakdown">
         <div class="breakdown-intro"><span class="section-kicker">03</span><h2>分析结果摘要</h2><p>先看懂这张图，再决定提示词如何落地。</p></div>
         <div class="breakdown-grid">
-          ${profile.cards.map((card) => renderBreakdownCard(card.icon, card.title, card.body, card.value)).join('')}
+          ${profile.cards.map((card, index) => renderBreakdownCard(card.icon, card.title, card.body, card.value, index)).join('')}
         </div>
       </div>
     </section>
@@ -867,8 +867,8 @@ function renderSourceContent() {
   `;
 }
 
-function renderBreakdownCard(iconName, title, body, value) {
-  return `<div class="breakdown-card"><div class="breakdown-icon">${icon(iconName, 18)}</div><div class="breakdown-copy"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(body)}</p><span class="breakdown-value">${escapeHtml(value)}</span></div></div>`;
+function renderBreakdownCard(iconName, title, body, value, index = 0) {
+  return `<div class="breakdown-card" style="--card-index:${Math.min(index, 8)}"><div class="breakdown-icon">${icon(iconName, 18)}</div><div class="breakdown-copy"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(body)}</p><span class="breakdown-value">${escapeHtml(value)}</span></div></div>`;
 }
 
 function renderPromptDrawer() {

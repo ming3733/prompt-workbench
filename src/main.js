@@ -491,7 +491,7 @@ function icon(name, size = 16) {
 
 function render() {
   app.innerHTML = `
-    <div class="app-shell ${state.dark ? 'is-dark' : ''}">
+    <div class="app-shell">
       ${renderTopbar()}
       <div class="app-body">
         ${renderSidebar()}
@@ -545,7 +545,7 @@ function renderTopbar() {
         <kbd>⌘K</kbd>
       </label>
       <div class="topbar-actions">
-        <button class="theme-button" data-action="toggle-theme" title="切换主题">${icon(state.dark ? 'sun' : 'moon', 16)}<span>${state.dark ? '浅色' : '深色'}</span></button>
+        <button class="theme-button" data-action="toggle-theme" title="当前固定为浅色模式">${icon('sun', 16)}<span>浅色</span></button>
         <button class="account-button ${state.account ? 'is-signed-in' : ''}" data-action="open-account" title="邮箱登录与同步">${icon(state.account ? 'cloud-check' : 'log-in', 15)}<span>${state.account ? escapeHtml(state.account.email) : '登录同步'}</span></button>
         <button class="primary-button top-create" data-action="quick-capture">${icon('plus', 16)}<span>收录内容</span></button>
         <button class="mobile-menu" data-action="toggle-mobile-sidebar" title="打开导航">${icon('menu', 18)}</button>
@@ -1788,7 +1788,7 @@ function openCaptureModal() {
     <div class="prompt-modal capture-modal" role="dialog" aria-modal="true" aria-labelledby="capture-modal-title">
       <div class="modal-head"><div><span class="eyebrow">QUICK CAPTURE</span><h2 id="capture-modal-title">快速收录</h2></div><button class="icon-button" data-modal-action="close" title="关闭">${icon('x', 17)}</button></div>
       <div class="modal-body">
-        <p class="capture-helper">粘贴文字或图片，先收录，之后再整理。</p>
+        <p class="capture-helper">粘贴文字先收录，之后再整理。需要封面时，直接粘贴图片即可显示。</p>
         <div class="capture-image-box" id="capture-image-box">
           <div class="capture-image-empty">${icon('image-plus', 18)}<strong>封面图</strong><span>粘贴图片作为封面，再次粘贴会直接替换</span></div>
           <img id="capture-image-preview" alt="已添加封面" hidden />

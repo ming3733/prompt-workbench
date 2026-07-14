@@ -10,6 +10,14 @@ const referenceImages = {
   collector: publicAsset('reference/prompt-collector-reference.png'),
 };
 
+function normalizePreviewSource(preview, fallback = referenceImages.collector) {
+  const raw = String(preview || '').trim();
+  if (!raw || raw.startsWith('blob:')) return fallback;
+  const referencePath = raw.match(/(?:^|\/)(reference\/[^?#]+)/)?.[1];
+  if (referencePath) return publicAsset(referencePath);
+  return raw;
+}
+
 const promptTypes = ['UI提示词', '图片提示词', 'icon提示词', '视频提示词'];
 
 const starterPrompts = [
@@ -99,7 +107,7 @@ const accountStorageKey = 'promptly-account-v1';
 const workspaceStorageKey = 'promptly-workspaces-v1';
 
 function cloneStarterPrompts() {
-  return starterPrompts.map((prompt) => ({ ...prompt, tags: [...prompt.tags] }));
+  return starterPrompts.map((prompt) => ({ ...prompt, tags: [...prompt.tags], preview: normalizePreviewSource(prompt.preview) }));
 }
 
 function loadStoredArray(key, fallback) {
@@ -182,7 +190,13 @@ function sanitizePromptContent(value) {
 }
 
 function clonePrompts(prompts) {
-  return (Array.isArray(prompts) ? prompts : []).map((prompt) => ({ ...prompt, type: normalizePromptType(prompt.type), tags: normalizeTags(prompt.tags), prompt: sanitizePromptContent(prompt.prompt) }));
+  return (Array.isArray(prompts) ? prompts : []).map((prompt) => ({
+    ...prompt,
+    type: normalizePromptType(prompt.type),
+    tags: normalizeTags(prompt.tags),
+    preview: normalizePreviewSource(prompt.preview),
+    prompt: sanitizePromptContent(prompt.prompt),
+  }));
 }
 
 function normalizeWorkspace(workspace, index = 0) {
@@ -291,7 +305,7 @@ function promptFromCapture(capture) {
     updated: '刚刚',
     source: capture.sourceTitle || '浏览器收录',
     sourceUrl,
-    preview: capture.preview || referenceImages.collector,
+    preview: normalizePreviewSource(capture.preview),
     prompt,
     favorite: false,
   };
@@ -619,6 +633,7 @@ function renderLibrary() {
 
 function renderPromptCard(prompt) {
   const promptContent = sanitizePromptContent(prompt.prompt);
+  const preview = normalizePreviewSource(prompt.preview);
   return `
     <article class="prompt-card ${samePromptId(state.selectedPromptId, prompt.id) ? 'is-focused' : ''} ${isPromptSelected(prompt.id) ? 'is-selected' : ''}" data-prompt-id="${escapeAttr(prompt.id)}">
       <div class="card-topline">
@@ -628,7 +643,7 @@ function renderPromptCard(prompt) {
       <button class="card-main" data-open-prompt="${escapeAttr(prompt.id)}">
         <div class="card-title-line"><h2>${escapeHtml(prompt.title)}</h2><span class="favorite-button ${prompt.favorite ? 'is-favorite' : ''}" data-favorite="${escapeAttr(prompt.id)}" role="button" title="${prompt.favorite ? '取消常用' : '加入常用'}">${icon(prompt.favorite ? 'star' : 'star', 16)}</span></div>
         <p class="prompt-excerpt">${escapeHtml(promptContent)}</p>
-        <div class="prompt-preview-wrap"><img src="${escapeAttr(prompt.preview)}" alt="${escapeAttr(prompt.title)} 参考图" /><span class="preview-overlay">${icon('scan-search', 15)}<span>查看来源</span></span></div>
+        <div class="prompt-preview-wrap"><img src="${escapeAttr(preview)}" data-fallback-src="${escapeAttr(referenceImages.collector)}" alt="${escapeAttr(prompt.title)} 参考图" /><span class="preview-overlay">${icon('scan-search', 15)}<span>查看来源</span></span></div>
       </button>
       <div class="card-footer">
         <div class="card-meta"><span>${icon('link-2', 13)}${escapeHtml(prompt.source)}</span><span>${escapeHtml(prompt.updated)}</span></div>
@@ -861,12 +876,13 @@ function renderPromptDrawer() {
   if (!prompt) return '';
   const editing = state.drawerEditing;
   const promptContent = sanitizePromptContent(prompt.prompt);
+  const preview = normalizePreviewSource(prompt.preview);
   return `
     <div class="drawer-backdrop" data-action="close-drawer"></div>
     <aside class="prompt-drawer">
       <div class="drawer-head"><div><span class="eyebrow">PROMPT DETAIL</span><h2>提示词详情</h2></div><button class="icon-button" data-action="close-drawer" title="关闭详情">${icon('x', 17)}</button></div>
       <div class="drawer-scroll">
-        <img id="${editing ? 'drawer-cover-preview' : ''}" class="drawer-image ${editing ? 'is-paste-target' : ''}" src="${escapeAttr(prompt.preview)}" data-preview="${escapeAttr(prompt.preview)}" alt="${escapeAttr(prompt.title)} 参考图" ${editing ? 'tabindex="0" title="编辑状态下可粘贴图片替换封面"' : ''} />
+        <img id="${editing ? 'drawer-cover-preview' : ''}" class="drawer-image ${editing ? 'is-paste-target' : ''}" src="${escapeAttr(preview)}" data-preview="${escapeAttr(preview)}" data-fallback-src="${escapeAttr(referenceImages.collector)}" alt="${escapeAttr(prompt.title)} 参考图" ${editing ? 'tabindex="0" title="编辑状态下可粘贴图片替换封面"' : ''} />
         <div class="drawer-type-row"><span class="prompt-type ${promptTypeClass(prompt.type)}">${escapeHtml(normalizePromptType(prompt.type))}</span><span class="drawer-source">${escapeHtml(prompt.source)} · ${escapeHtml(prompt.updated)}</span></div>
         ${editing ? `<label class="drawer-title-editor"><span>标题 <em>编辑中</em></span><input id="drawer-title" value="${escapeAttr(prompt.title)}" placeholder="输入标题" /></label>` : `<h3 class="drawer-title">${escapeHtml(prompt.title)}</h3>`}
         ${editing ? `<label class="drawer-tag-editor"><span>标签 <em>编辑中</em></span><input id="drawer-tags" value="${escapeAttr(tagsToInputValue(prompt.tags))}" placeholder="例如：UI 设计，参考图" /><small>逗号、顿号或竖线分隔，保存时自动去重。</small></label>` : `<div class="drawer-tags">${normalizeTags(prompt.tags).map((tag) => `<span class="prompt-tag">${escapeHtml(tag)}</span>`).join('')}</div>`}
@@ -1411,7 +1427,7 @@ function formatFileSize(bytes) {
 }
 
 function persistablePreview(preview) {
-  return preview && !String(preview).startsWith('blob:') ? preview : referenceImages.library;
+  return normalizePreviewSource(preview, referenceImages.library);
 }
 
 function handleAssetFile(file) {
@@ -2029,6 +2045,13 @@ document.addEventListener('keydown', (event) => {
     render();
   }
 });
+
+window.addEventListener('error', (event) => {
+  const image = event.target;
+  if (!(image instanceof HTMLImageElement) || !image.dataset.fallbackSrc || image.dataset.fallbackApplied) return;
+  image.dataset.fallbackApplied = 'true';
+  image.src = image.dataset.fallbackSrc;
+}, true);
 
 window.addEventListener('message', (event) => {
   if (event.source !== window || event.data?.source !== 'promptly-extension') return;

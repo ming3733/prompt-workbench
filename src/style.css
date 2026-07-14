@@ -412,9 +412,9 @@ h1 { margin-top: 8px; color: var(--text); font-size: clamp(26px, 3vw, 34px); let
 .custom-select-option { width: 100%; min-height: 42px; padding: 0 13px; border-radius: 10px; color: #4c5a6d; background: transparent; text-align: left; font-size: 13px; font-weight: 600; }
 .custom-select-option:hover { color: var(--blue); background: var(--blue-tint); }
 .custom-select-option.is-selected { color: #0657ff; background: #eef4ff; }
-.capture-modal .custom-select-trigger { min-height: 50px; padding: 0 18px; border-radius: 14px; font-size: 16px; font-weight: 500; }
-.capture-modal .custom-select-menu { top: calc(100% + 12px); gap: 7px; width: 100%; min-width: 0; padding: 12px; border-radius: 16px; box-shadow: 0 24px 60px rgba(29, 45, 70, .16); }
-.capture-modal .custom-select-option { min-height: 48px; padding: 0 20px; border-radius: 11px; font-size: 15px; font-weight: 500; }
+.capture-modal .custom-select-trigger { min-height: 37px; padding: 0 10px; border-radius: 8px; font-size: 11px; font-weight: 600; }
+.capture-modal .custom-select-menu { top: calc(100% + 8px); gap: 4px; width: 100%; min-width: 0; padding: 8px; border-radius: 12px; box-shadow: 0 18px 42px rgba(29, 45, 70, .14); }
+.capture-modal .custom-select-option { min-height: 37px; padding: 0 10px; border-radius: 8px; font-size: 11px; font-weight: 600; }
 .field-hint { margin-top: -10px; color: var(--text-faint); font-size: 9px; line-height: 1.55; }
 .modal-actions { position: sticky; bottom: 0; z-index: 2; flex: 0 0 auto; display: flex; justify-content: flex-end; gap: 8px; padding: 15px 24px 21px; border-top: 1px solid var(--border); background: var(--surface); box-shadow: 0 -6px 16px rgba(39, 61, 91, .02); }
 

@@ -1,4 +1,4 @@
-const APP_URL = 'http://localhost:5197/';
+const APP_URL = 'https://ming3733.github.io/prompt-workbench/';
 const PENDING_CAPTURE_KEY = 'promptly-pending-capture-v1';
 
 const pageTitle = document.querySelector('#page-title');
@@ -187,6 +187,10 @@ collectButton.addEventListener('click', () => {
   });
 });
 
-document.querySelector('#open').addEventListener('click', () => chrome.tabs.create({ url: APP_URL }));
+document.querySelector('#open').addEventListener('click', () => {
+  chrome.runtime.sendMessage({ type: 'open-workbench' }, (result) => {
+    if (chrome.runtime.lastError || !result?.ok) chrome.tabs.create({ url: APP_URL });
+  });
+});
 
 initializePopup();

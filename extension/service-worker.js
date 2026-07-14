@@ -1,8 +1,12 @@
-const APP_URL = 'http://localhost:5197/';
+const APP_URL = 'https://ming3733.github.io/prompt-workbench/';
 const PENDING_CAPTURE_KEY = 'promptly-pending-capture-v1';
 const QUEUED_CAPTURES_KEY = 'promptly-queued-captures-v1';
 const POPUP_WINDOW = { width: 380, height: 640 };
-const WORKBENCH_MATCHES = ['http://localhost:5197/*', 'http://127.0.0.1:5197/*'];
+const WORKBENCH_MATCHES = [
+  'http://localhost:5197/*',
+  'http://127.0.0.1:5197/*',
+  'https://ming3733.github.io/prompt-workbench*',
+];
 
 function createMenus() {
   chrome.contextMenus.removeAll(() => {
@@ -126,7 +130,25 @@ function sendFlushMessage(tabId) {
 
 async function notifyWorkbenchTabs() {
   const tabs = await queryWorkbenchTabs();
-  await Promise.all(tabs.filter((tab) => tab.id).map((tab) => sendFlushMessage(tab.id)));
+  const results = await Promise.all(tabs.filter((tab) => tab.id).map((tab) => sendFlushMessage(tab.id)));
+  return results.some(Boolean);
+}
+
+async function openWorkbenchIfNeeded() {
+  const tabs = await queryWorkbenchTabs();
+  const existingTab = tabs.find((tab) => tab.id);
+  if (existingTab) {
+    await chrome.tabs.update(existingTab.id, { active: true });
+    if (existingTab.windowId) await chrome.windows.update(existingTab.windowId, { focused: true });
+    return tabs;
+  }
+  const tab = await chrome.tabs.create({ url: APP_URL, active: true });
+  return tab ? [tab] : [];
+}
+
+async function deliverCaptureQueue() {
+  const delivered = await notifyWorkbenchTabs();
+  if (!delivered) await openWorkbenchIfNeeded();
 }
 
 async function collectCurrentTab(customCapture = null) {
@@ -144,7 +166,7 @@ async function collectCurrentTab(customCapture = null) {
       sourceUrl: sourceTab.url || '',
     });
     await queueCapture(capture);
-    await notifyWorkbenchTabs();
+    await deliverCaptureQueue();
     return { ok: true, capture, queued: true };
   }
   if (!tab?.id) return { ok: false, message: '没有找到当前网页' };
@@ -199,6 +221,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
   if (message?.type === 'collect-current') {
     collectCurrentTab(message.capture || null).then(sendResponse).catch(() => sendResponse({ ok: false, message: '收录失败' }));
+    return true;
+  }
+  if (message?.type === 'open-workbench') {
+    openWorkbenchIfNeeded().then(() => sendResponse({ ok: true })).catch(() => sendResponse({ ok: false }));
     return true;
   }
   return false;

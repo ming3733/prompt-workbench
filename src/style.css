@@ -31,6 +31,11 @@
   --radius-lg: 16px;
   --ease-out: cubic-bezier(.16, 1, .3, 1);
   --ease-spring: cubic-bezier(.2, .85, .22, 1.15);
+  --motion-ease: cubic-bezier(.2, .7, .2, 1);
+  --motion-fast: 180ms;
+  --motion-medium: 350ms;
+  --motion-slow: 720ms;
+  --motion-stagger: 52ms;
 }
 
 :root.theme-dark {
@@ -62,7 +67,7 @@
 }
 
 * { box-sizing: border-box; }
-html { min-width: 320px; background: var(--canvas); }
+html { min-width: 320px; scroll-behavior: smooth; background: var(--canvas); }
 body { margin: 0; color: var(--text); background: var(--canvas); font-family: 'Manrope', 'Noto Sans SC', sans-serif; -webkit-font-smoothing: antialiased; transition: background .25s ease, color .25s ease; }
 body.modal-open { overflow: hidden; overscroll-behavior: none; }
 button, input, textarea, select { font: inherit; }
@@ -91,7 +96,10 @@ img { display: block; max-width: 100%; }
   linear-gradient(180deg, rgba(15, 23, 42, .72), rgba(15, 23, 42, 0) 220px),
   var(--canvas); }
 
-.topbar { height: 66px; padding: 0 24px; display: flex; align-items: center; gap: 24px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 20; }
+.topbar { height: 66px; padding: 0 24px; display: flex; align-items: center; gap: 24px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 20; transition: background var(--motion-medium) ease, border-color var(--motion-medium) ease, box-shadow var(--motion-medium) ease, backdrop-filter var(--motion-medium) ease; }
+.topbar.is-scrolled { border-color: color-mix(in srgb, var(--border) 78%, transparent); background: color-mix(in srgb, var(--surface) 92%, transparent); box-shadow: 0 10px 28px rgba(29, 46, 72, .06); backdrop-filter: blur(14px) saturate(1.08); }
+.scroll-progress { position: sticky; top: 0; z-index: 25; height: 2px; margin-top: -2px; color: var(--blue); pointer-events: none; }
+.scroll-progress span { display: block; width: 100%; height: 100%; background: linear-gradient(90deg, var(--blue), #7bbdff 56%, var(--purple)); transform: scaleX(0); transform-origin: left center; transition: transform 120ms linear; }
 .brand-lockup { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
 .brand-mark { display: grid; place-items: center; width: 31px; height: 31px; color: #fff; background: var(--blue); border-radius: 9px; box-shadow: 0 4px 9px rgba(13, 123, 232, .22); }
 .brand-name { font-weight: 800; letter-spacing: -.03em; line-height: 1.05; font-size: 15px; }
@@ -554,8 +562,12 @@ select:focus {
 .sidebar-tag,
 .filter-chip,
 .sample-card,
-.workspace-option {
-  transition: color .18s var(--ease-out), background .18s var(--ease-out), border-color .18s var(--ease-out), box-shadow .18s var(--ease-out), transform .18s var(--ease-out);
+.workspace-option,
+.copy-button,
+.favorite-button,
+.drop-action,
+.workspace-delete {
+  transition: color var(--motion-fast) var(--motion-ease), background var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease);
 }
 
 .nav-item::after {
@@ -609,11 +621,30 @@ select:focus {
 }
 
 .app-shell.is-entering .page-view {
-  animation: view-in .34s var(--ease-out);
+  animation: view-in var(--motion-slow) var(--motion-ease);
 }
 
 .app-shell.is-entering .page-heading {
-  animation: heading-in .38s var(--ease-out);
+  animation: heading-in 560ms var(--motion-ease);
+}
+
+.app-shell.is-entering .heading-stats > div {
+  animation: stat-in 520ms var(--motion-ease) both;
+  animation-delay: calc(var(--stat-index, 0) * var(--motion-stagger) + 90ms);
+}
+
+.heading-stats > div:nth-child(1) { --stat-index: 0; }
+.heading-stats > div:nth-child(2) { --stat-index: 1; }
+.heading-stats > div:nth-child(3) { --stat-index: 2; }
+.heading-stats > div:nth-child(4) { --stat-index: 3; }
+
+.app-shell.is-entering .library-toolbar,
+.app-shell.is-entering .filter-chip-row,
+.app-shell.is-entering .target-switcher,
+.app-shell.is-entering .analysis-summary,
+.app-shell.is-entering .data-metrics {
+  animation: reveal-up 560ms var(--motion-ease) both;
+  animation-delay: 110ms;
 }
 
 .sidebar {
@@ -623,7 +654,7 @@ select:focus {
 
 .app-shell.is-entering .folder-item,
 .app-shell.is-entering .sidebar-tag {
-  animation: sidebar-item-in .28s var(--ease-out) both;
+  animation: sidebar-item-in 460ms var(--motion-ease) both;
 }
 
 .app-shell.is-entering .folder-item:nth-child(1) { animation-delay: 20ms; }
@@ -654,15 +685,15 @@ select:focus {
 
 .app-shell.is-entering .panel,
 .app-shell.is-entering .data-panel {
-  animation: panel-in .34s var(--ease-out);
+  animation: panel-in 620ms var(--motion-ease) both;
 }
 
 .prompt-card {
   position: relative;
   overflow: hidden;
   transform-origin: 50% 80%;
-  animation: card-enter .34s var(--ease-out) both;
-  animation-delay: calc(var(--card-index, 0) * 28ms);
+  animation: card-enter 620ms var(--motion-ease) both;
+  animation-delay: calc(var(--card-index, 0) * var(--motion-stagger));
 }
 
 .prompt-card::before {
@@ -681,7 +712,7 @@ select:focus {
 .prompt-card.is-focused {
   border-color: transparent;
   box-shadow: var(--shadow-glow);
-  transform: translateY(-1px);
+  transform: translateY(-3px) scale(1.003);
 }
 
 .prompt-card:hover::before,
@@ -691,6 +722,22 @@ select:focus {
 
 .prompt-preview-wrap {
   box-shadow: 0 1px 0 rgba(255,255,255,.66) inset;
+}
+
+.prompt-preview-wrap img,
+.asset-preview img,
+.sample-card img {
+  transition: transform 800ms var(--motion-ease), filter 800ms var(--motion-ease);
+  will-change: transform;
+}
+
+.prompt-card:hover .prompt-preview-wrap img {
+  transform: scale(1.04);
+}
+
+.asset-preview:hover img,
+.sample-card:hover img {
+  transform: scale(1.06);
 }
 
 .prompt-preview-wrap::after,
@@ -705,6 +752,7 @@ select:focus {
 
 .preview-overlay {
   transform: translateY(5px);
+  transition: opacity var(--motion-fast) ease, transform var(--motion-fast) var(--motion-ease);
 }
 
 .prompt-card:hover .preview-overlay {
@@ -722,13 +770,13 @@ select:focus {
 }
 
 .breakdown-card {
-  animation: card-enter .34s var(--ease-out) both;
-  animation-delay: calc(var(--card-index, 0) * 34ms + 70ms);
-  transition: transform .18s var(--ease-out), box-shadow .18s var(--ease-out);
+  animation: card-enter 620ms var(--motion-ease) both;
+  animation-delay: calc(var(--card-index, 0) * var(--motion-stagger) + 120ms);
+  transition: transform var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease);
 }
 
 .breakdown-card:hover {
-  transform: translateY(-1px);
+  transform: translateY(-3px);
   box-shadow: var(--shadow-glow);
 }
 
@@ -746,7 +794,16 @@ select:focus {
 .analyze-button,
 .capture-button,
 .account-button {
+  position: relative;
+  overflow: hidden;
   transition: transform .18s var(--ease-out), background .18s ease, box-shadow .18s ease, filter .18s ease;
+}
+
+.primary-button:hover,
+.analyze-button:hover,
+.capture-button:hover,
+.account-button:hover {
+  filter: saturate(1.04);
 }
 
 .primary-button:active,
@@ -758,14 +815,56 @@ select:focus {
   transform: translateY(1px) scale(.985);
 }
 
+.analyze-button.is-loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,.22) 42%, transparent 72%);
+  transform: translateX(-100%);
+  animation: loading-sheen 1.3s var(--motion-ease) infinite;
+}
+
+.status-dot,
+.summary-dot {
+  animation: dot-pulse 2.4s ease-in-out infinite;
+}
+
+.check-wrap span {
+  transition: border-color var(--motion-fast) var(--motion-ease), background var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease);
+}
+
+.check-wrap input:checked + span {
+  animation: check-pop 260ms var(--ease-spring);
+}
+
 .drawer-backdrop {
-  animation: fade-in .22s ease-out;
+  animation: fade-in var(--motion-medium) ease-out;
 }
 
 .prompt-drawer {
   border-left: 1px solid color-mix(in srgb, var(--border) 64%, transparent);
-  animation: drawer-in .22s var(--ease-out);
+  animation: drawer-in var(--motion-medium) var(--motion-ease);
 }
+
+.prompt-drawer .drawer-image,
+.prompt-drawer .drawer-type-row,
+.prompt-drawer .drawer-title,
+.prompt-drawer .drawer-title-editor,
+.prompt-drawer .drawer-tags,
+.prompt-drawer .drawer-tag-editor,
+.prompt-drawer .drawer-editor,
+.prompt-drawer .drawer-note {
+  animation: reveal-up 560ms var(--motion-ease) both;
+}
+
+.prompt-drawer .drawer-image { animation-delay: 40ms; }
+.prompt-drawer .drawer-type-row { animation-delay: 80ms; }
+.prompt-drawer .drawer-title,
+.prompt-drawer .drawer-title-editor { animation-delay: 120ms; }
+.prompt-drawer .drawer-tags,
+.prompt-drawer .drawer-tag-editor { animation-delay: 160ms; }
+.prompt-drawer .drawer-editor { animation-delay: 200ms; }
+.prompt-drawer .drawer-note { animation-delay: 240ms; }
 
 .drawer-image {
   box-shadow: 0 8px 20px rgba(31, 59, 92, .045);
@@ -773,16 +872,42 @@ select:focus {
 
 .toast {
   border-color: color-mix(in srgb, var(--border) 70%, transparent);
-  animation: toast-in .28s var(--ease-out);
+  animation: toast-in var(--motion-medium) var(--motion-ease);
 }
 
 .modal-backdrop {
-  animation: fade-in .16s ease-out;
+  animation: fade-in var(--motion-fast) ease-out;
 }
 
 .prompt-modal {
-  animation: modal-in .2s var(--ease-out);
+  animation: modal-in var(--motion-medium) var(--motion-ease);
 }
+
+.prompt-modal .modal-head,
+.prompt-modal .modal-body > *,
+.prompt-modal .modal-actions {
+  animation: reveal-up 520ms var(--motion-ease) both;
+}
+
+.prompt-modal .modal-head { animation-delay: 40ms; }
+.prompt-modal .modal-body > *:nth-child(1) { animation-delay: 80ms; }
+.prompt-modal .modal-body > *:nth-child(2) { animation-delay: 120ms; }
+.prompt-modal .modal-body > *:nth-child(3) { animation-delay: 160ms; }
+.prompt-modal .modal-body > *:nth-child(4) { animation-delay: 200ms; }
+.prompt-modal .modal-body > *:nth-child(5) { animation-delay: 240ms; }
+.prompt-modal .modal-body > *:nth-child(n + 6) { animation-delay: 280ms; }
+.prompt-modal .modal-actions { animation-delay: 300ms; }
+
+.custom-select.is-open .custom-select-option {
+  animation: select-option-in 260ms var(--motion-ease) both;
+  animation-delay: calc(var(--select-index, 0) * 34ms);
+}
+
+.custom-select-option:nth-child(1) { --select-index: 0; }
+.custom-select-option:nth-child(2) { --select-index: 1; }
+.custom-select-option:nth-child(3) { --select-index: 2; }
+.custom-select-option:nth-child(4) { --select-index: 3; }
+.custom-select-option:nth-child(5) { --select-index: 4; }
 
 @keyframes view-in {
   from { opacity: 0; transform: translateY(10px); }
@@ -791,6 +916,16 @@ select:focus {
 
 @keyframes heading-in {
   from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes stat-in {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes reveal-up {
+  from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -810,13 +945,33 @@ select:focus {
 }
 
 @keyframes drawer-in {
-  from { transform: translateX(28px); opacity: .55; }
+  from { transform: translateX(34px) scale(.985); opacity: .55; }
   to { transform: translateX(0); opacity: 1; }
 }
 
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@keyframes select-option-in {
+  from { opacity: 0; transform: translateY(-4px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes loading-sheen {
+  to { transform: translateX(100%); }
+}
+
+@keyframes dot-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 3px var(--green-soft); }
+  50% { transform: scale(1.12); box-shadow: 0 0 0 5px color-mix(in srgb, var(--green-soft) 72%, transparent); }
+}
+
+@keyframes check-pop {
+  0% { transform: scale(.86); }
+  70% { transform: scale(1.08); }
+  100% { transform: scale(1); }
 }
 
 @media (prefers-reduced-motion: reduce) {

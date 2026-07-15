@@ -614,6 +614,7 @@ function render() {
   app.innerHTML = `
     <div class="app-shell ${state.dark ? 'is-dark' : ''} ${state.hasRendered ? 'has-rendered' : 'is-entering'}">
       ${renderTopbar()}
+      <div class="scroll-progress" aria-hidden="true"><span></span></div>
       <div class="app-body">
         ${renderSidebar()}
         <main class="main-content">
@@ -628,6 +629,7 @@ function render() {
   `;
   createIcons({ icons });
   bindEvents();
+  updateMotionState();
   state.hasRendered = true;
 }
 
@@ -1166,6 +1168,7 @@ function renderLibraryOnly() {
   current.innerHTML = renderLibrary();
   createIcons({ icons });
   bindEvents();
+  updateMotionState();
 }
 
 function createAnalysisState(overrides = {}) {
@@ -2160,6 +2163,27 @@ function showToast(message, iconName = 'check') {
   window.setTimeout(() => toast.remove(), 2600);
 }
 
+let motionFrame = 0;
+
+function updateMotionState() {
+  const topbar = document.querySelector('.topbar');
+  const progressBar = document.querySelector('.scroll-progress span');
+  const root = document.documentElement;
+  const scrollTop = window.scrollY || root.scrollTop || 0;
+  const scrollMax = Math.max(0, root.scrollHeight - window.innerHeight);
+  const progress = scrollMax ? Math.min(1, Math.max(0, scrollTop / scrollMax)) : 0;
+  topbar?.classList.toggle('is-scrolled', scrollTop > 12);
+  if (progressBar) progressBar.style.transform = `scaleX(${progress})`;
+}
+
+function requestMotionStateUpdate() {
+  if (motionFrame) return;
+  motionFrame = window.requestAnimationFrame(() => {
+    motionFrame = 0;
+    updateMotionState();
+  });
+}
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
 }
@@ -2186,6 +2210,9 @@ window.addEventListener('error', (event) => {
   image.dataset.fallbackApplied = 'true';
   image.src = image.dataset.fallbackSrc;
 }, true);
+
+window.addEventListener('scroll', requestMotionStateUpdate, { passive: true });
+window.addEventListener('resize', requestMotionStateUpdate);
 
 window.addEventListener('message', (event) => {
   if (event.source !== window || event.data?.source !== 'promptly-extension') return;

@@ -5,6 +5,7 @@
   background: #f5f8fc;
   --scrollbar-thumb: rgba(153, 164, 180, .52);
   --scrollbar-thumb-hover: rgba(103, 114, 132, .74);
+  --cover-aspect: 16 / 9;
 }
 * { box-sizing: border-box; }
 * { scrollbar-width: thin; scrollbar-color: transparent transparent; }
@@ -45,12 +46,12 @@ input:focus, textarea:focus { color: #1d2530; border-color: #83b8ef; background:
 .custom-select-option.is-selected { color: #0657ff; background: #eef4ff; }
 .small-button { min-width: 76px; min-height: 34px; padding: 0 9px; border: 1px solid #afd0f4; border-radius: 8px; color: #0d7be8; background: #eef5ff; font-size: 10px; font-weight: 700; }
 .small-button:hover { background: #e5f1ff; }
-.image-box { position: relative; display: grid; place-items: center; min-height: 68px; overflow: hidden; border: 1px dashed #d6dee9; border-radius: 9px; color: #99a4b4; background: #f7f9fc; }
+.image-box { position: relative; display: grid; place-items: center; aspect-ratio: var(--cover-aspect); min-height: 0; overflow: hidden; border: 1px dashed #d6dee9; border-radius: 9px; color: #99a4b4; background: #f7f9fc; }
 .image-empty { display: grid; gap: 4px; justify-items: center; }
 .image-empty span { font-size: 11px; color: #677284; }
 .image-empty small { font-size: 9px; }
 .image-preview { display: block; }
-.image-box img { width: 100%; max-height: 180px; object-fit: contain; background: #f7f9fc; }
+.image-box img { width: 100%; height: 100%; max-height: none; object-fit: cover; background: #f7f9fc; }
 .remove-image { position: absolute; top: 7px; right: 7px; min-height: 26px; padding: 0 8px; border: 1px solid #f1caca; border-radius: 6px; color: #c54c4c; background: rgba(255, 255, 255, .94); font-size: 10px; }
 .remove-image:hover { background: #fff0f0; }
 button { cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; }

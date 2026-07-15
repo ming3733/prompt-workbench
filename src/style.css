@@ -489,6 +489,32 @@ h1 { margin-top: 8px; color: var(--text); font-size: clamp(26px, 3vw, 34px); let
   background: var(--blue-soft);
 }
 
+input:not([type="hidden"]):focus,
+textarea:focus,
+select:focus {
+  color: #1d2530;
+  background-color: #fff;
+}
+
+.global-search:focus-within,
+.url-field:focus-within,
+.prompt-editor-wrap:focus-within {
+  color: #677284;
+  background: #fff;
+}
+
+.global-search:focus-within input,
+.url-field:focus-within input,
+.prompt-editor-wrap:focus-within textarea {
+  color: #1d2530;
+}
+
+.custom-select-trigger:focus,
+.custom-select.is-open .custom-select-trigger {
+  color: #1d2530;
+  background: #fff;
+}
+
 :root.theme-dark .modal-backdrop,
 :root.theme-dark .drawer-backdrop {
   background: rgba(3, 8, 18, .62);

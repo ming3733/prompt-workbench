@@ -147,8 +147,12 @@ function persistThemePreference() {
 }
 
 function syncThemeClass() {
+  const theme = state.dark ? 'dark' : 'light';
   document.documentElement.classList.toggle('theme-dark', state.dark);
   document.body.classList.toggle('theme-dark', state.dark);
+  document.documentElement.dataset.theme = theme;
+  document.body.dataset.theme = theme;
+  document.documentElement.style.colorScheme = theme;
 }
 
 function normalizePromptType(type, kind = 'text') {
@@ -643,7 +647,7 @@ function renderTopbar() {
   const libraryActive = state.view === 'library';
   const analyzerActive = state.view === 'analyzer';
   const dataActive = state.view === 'data';
-  const themeLabel = state.dark ? '暗色' : '浅色';
+  const themeLabel = state.dark ? '浅色模式' : '暗色模式';
   const themeTitle = state.dark ? '切换到浅色模式' : '切换到暗色模式';
   return `
     <header class="topbar">
@@ -671,7 +675,7 @@ function renderTopbar() {
         <kbd>⌘K</kbd>
       </label>
       <div class="topbar-actions">
-        <button class="theme-button" data-action="toggle-theme" title="${themeTitle}">${icon(state.dark ? 'moon' : 'sun', 16)}<span>${themeLabel}</span></button>
+        <button class="theme-button" data-action="toggle-theme" title="${themeTitle}" aria-pressed="${state.dark ? 'true' : 'false'}">${icon(state.dark ? 'sun' : 'moon', 16)}<span>${themeLabel}</span></button>
         <button class="account-button ${state.account ? 'is-signed-in' : ''}" data-action="open-account" title="邮箱登录与同步">${icon(state.account ? 'cloud-check' : 'log-in', 15)}<span>${state.account ? escapeHtml(state.account.email) : '登录同步'}</span></button>
         <button class="primary-button top-create" data-action="quick-capture">${icon('plus', 16)}<span>收录内容</span></button>
         <button class="mobile-menu" data-action="toggle-mobile-sidebar" title="打开导航">${icon('menu', 18)}</button>

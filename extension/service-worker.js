@@ -14,7 +14,7 @@ function createMenus() {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: 'promptly-root',
-      title: '小明提示词收录',
+      title: '提示词收录',
       contexts: ['selection', 'image', 'page'],
     });
     chrome.contextMenus.create({

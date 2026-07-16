@@ -239,11 +239,12 @@ function loadWorkspaceCatalog() {
   const stored = loadStoredObject(workspaceStorageKey);
   if (Array.isArray(stored?.workspaces) && stored.workspaces.length) {
     const workspaces = stored.workspaces.map(normalizeWorkspace);
-    return { version: 1, activeId: String(stored.activeId || workspaces[0].id), workspaces };
+    return { version: 1, activeId: String(stored.activeId || workspaces[0].id), workspaces, hydratedFromStorage: true };
   }
   return {
     version: 1,
     activeId: 'local-main',
+    hydratedFromStorage: false,
     workspaces: [normalizeWorkspace({
       id: 'local-main',
       name: '我的本地库',
@@ -414,7 +415,9 @@ if (incomingCapture) {
   }
   window.history.replaceState({}, document.title, window.location.pathname);
 }
-persistPrompts();
+if (!incomingCapture && !workspaceCatalog.hydratedFromStorage) {
+  persistWorkspaceCatalog();
+}
 
 const analysisPrompt = {
   Codex: `请基于上传的界面参考，生成一个可运行的响应式网页原型。
@@ -488,6 +491,16 @@ function findPrompt(id) {
   return state.prompts.find((prompt) => samePromptId(prompt.id, id));
 }
 
+function replacePrompt(updatedPrompt) {
+  let replaced = false;
+  state.prompts = state.prompts.map((prompt) => {
+    if (!samePromptId(prompt.id, updatedPrompt.id)) return prompt;
+    replaced = true;
+    return clonePrompts([updatedPrompt])[0];
+  });
+  return replaced;
+}
+
 function isPromptSelected(id) {
   return state.selectedPromptIds.some((selectedId) => samePromptId(selectedId, id));
 }
@@ -509,6 +522,27 @@ function promptHasTag(prompt, selectedTag) {
   if (!selectedTag) return true;
   const key = tagIdentity(selectedTag);
   return normalizeTags(prompt.tags).some((tag) => tagIdentity(tag) === key);
+}
+
+function applyWorkspaceCatalogSnapshot(catalog, options = {}) {
+  if (!Array.isArray(catalog?.workspaces) || !catalog.workspaces.length) return false;
+  const workspaces = catalog.workspaces.map(normalizeWorkspace);
+  const preferredId = String(catalog.activeId || state.workspaceId || workspaces[0].id);
+  const nextWorkspace = workspaces.find((workspace) => workspace.id === preferredId)
+    || workspaces.find((workspace) => workspace.id === state.workspaceId)
+    || workspaces[0];
+  state.workspaces = workspaces;
+  state.workspaceId = nextWorkspace.id;
+  state.prompts = clonePrompts(nextWorkspace.prompts);
+  state.folders = [...nextWorkspace.folders];
+  if (!findPrompt(state.selectedPromptId)) {
+    state.selectedPromptId = null;
+    state.drawerEditing = false;
+  }
+  state.selectedPromptIds = state.selectedPromptIds.filter((id) => findPrompt(id));
+  render();
+  if (options.toast) showToast('已同步最新本地数据', 'refresh-cw');
+  return true;
 }
 
 const app = document.querySelector('#app');
@@ -1806,14 +1840,18 @@ function handleAction(action, element, event) {
       return;
     }
     const editor = document.querySelector('#drawer-editor');
-    if (editor) prompt.prompt = sanitizePromptContent(editor.value.trim()) || prompt.prompt;
     const titleEditor = document.querySelector('#drawer-title');
-    if (titleEditor) prompt.title = titleEditor.value.trim() || prompt.title;
     const coverPreview = document.querySelector('#drawer-cover-preview');
-    if (coverPreview?.dataset.preview) prompt.preview = coverPreview.dataset.preview;
     const tagEditor = document.querySelector('#drawer-tags');
-    if (tagEditor) prompt.tags = normalizeTags(tagEditor.value);
-    prompt.updated = '刚刚';
+    const updatedPrompt = {
+      ...prompt,
+      title: titleEditor?.value.trim() || prompt.title,
+      prompt: editor ? sanitizePromptContent(editor.value.trim()) || prompt.prompt : prompt.prompt,
+      preview: coverPreview?.dataset.preview || prompt.preview,
+      tags: tagEditor ? normalizeTags(tagEditor.value) : normalizeTags(prompt.tags),
+      updated: '刚刚',
+    };
+    replacePrompt(updatedPrompt);
     state.drawerEditing = false;
     persistPrompts();
     render();
@@ -2221,6 +2259,19 @@ window.addEventListener('resize', requestMotionStateUpdate);
 window.addEventListener('message', (event) => {
   if (event.source !== window || event.data?.source !== 'promptly-extension') return;
   if (event.data.type === 'queued-captures') importExtensionCaptures(event.data.captures);
+});
+
+window.addEventListener('storage', (event) => {
+  if (event.key !== workspaceStorageKey || !event.newValue) return;
+  if (state.drawerEditing) {
+    showToast('检测到其他标签有更新，请保存当前编辑后刷新同步', 'info');
+    return;
+  }
+  try {
+    applyWorkspaceCatalogSnapshot(JSON.parse(event.newValue), { toast: true });
+  } catch {
+    // Ignore malformed storage updates from older local builds.
+  }
 });
 
 render();

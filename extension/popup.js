@@ -1,5 +1,7 @@
 const APP_URL = 'https://ming3733.github.io/prompt-workbench/';
 const PENDING_CAPTURE_KEY = 'promptly-pending-capture-v1';
+const COVER_INPUT_MAX_BYTES = 12 * 1024 * 1024;
+const COVER_MAX_DATA_URL_LENGTH = 520000;
 
 const pageTitle = document.querySelector('#page-title');
 const pageUrl = document.querySelector('#page-url');
@@ -22,6 +24,7 @@ const backupButton = document.querySelector('#backup');
 const queuedCount = document.querySelector('#queued-count');
 const historyCount = document.querySelector('#history-count');
 let imageData = '';
+let imageProcessing = false;
 let currentSource = { title: '', url: '' };
 
 function setPromptType(value) {
@@ -52,6 +55,73 @@ function sendRuntimeMessage(payload) {
       resolve(result || { ok: false });
     });
   });
+}
+
+function readImageFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('read-image-failed'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('load-image-failed'));
+    image.src = dataUrl;
+  });
+}
+
+function renderCompressedImageDataUrl(image, width, height, quality) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('canvas-unavailable');
+  context.fillStyle = '#fff';
+  context.fillRect(0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
+async function compressImageDataUrl(dataUrl) {
+  const image = await loadImageFromDataUrl(dataUrl);
+  const sourceWidth = image.naturalWidth || image.width || 1;
+  const sourceHeight = image.naturalHeight || image.height || 1;
+  const scale = Math.min(1, 1280 / sourceWidth, 720 / sourceHeight);
+  let width = Math.max(1, Math.round(sourceWidth * scale));
+  let height = Math.max(1, Math.round(sourceHeight * scale));
+  let quality = 0.84;
+  let compressed = renderCompressedImageDataUrl(image, width, height, quality);
+
+  while (compressed.length > COVER_MAX_DATA_URL_LENGTH && (quality > 0.52 || width > 640 || height > 360)) {
+    if (quality > 0.52) {
+      quality = Math.max(0.52, quality - 0.08);
+    } else {
+      width = Math.max(320, Math.round(width * 0.82));
+      height = Math.max(180, Math.round(height * 0.82));
+      quality = 0.76;
+    }
+    compressed = renderCompressedImageDataUrl(image, width, height, quality);
+  }
+  return compressed;
+}
+
+async function prepareCoverImageFile(file) {
+  if (!file?.type?.startsWith('image/') && !/\.(png|jpe?g|webp|gif|bmp|tiff?)$/i.test(file?.name || '')) throw new Error('cover-not-image');
+  if (file.size > COVER_INPUT_MAX_BYTES) throw new Error('cover-too-large');
+  const dataUrl = await readImageFileAsDataUrl(file);
+  if (dataUrl.length <= COVER_MAX_DATA_URL_LENGTH) return dataUrl;
+  return compressImageDataUrl(dataUrl);
+}
+
+function coverErrorMessage(error) {
+  return error?.message === 'cover-too-large'
+    ? '图片过大，请粘贴 12MB 内图片'
+    : '图片读取失败，请换一张图片';
 }
 
 async function copyText(value) {
@@ -188,16 +258,22 @@ function initializePopup() {
   refreshSyncStatus();
 }
 
-document.addEventListener('paste', (event) => {
+document.addEventListener('paste', async (event) => {
   const item = [...(event.clipboardData?.items || [])].find((entry) => entry.type.startsWith('image/'));
   if (!item) return;
   const file = item.getAsFile();
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => setImage(reader.result);
-  reader.readAsDataURL(file);
   event.preventDefault();
-  setMessage('图片已粘贴');
+  imageProcessing = true;
+  setMessage('正在处理图片...');
+  try {
+    setImage(await prepareCoverImageFile(file));
+    setMessage('图片已粘贴并压缩');
+  } catch (error) {
+    setMessage(coverErrorMessage(error), true);
+  } finally {
+    imageProcessing = false;
+  }
 });
 
 typeTrigger.addEventListener('click', (event) => {
@@ -235,6 +311,10 @@ document.querySelector('#ai-title').addEventListener('click', () => {
 });
 
 collectButton.addEventListener('click', () => {
+  if (imageProcessing) {
+    setMessage('图片还在处理中，请稍等', true);
+    return;
+  }
   const text = content.value.trim();
   if (!text && !imageData) {
     setMessage('请先输入文字或粘贴图片', true);
@@ -257,7 +337,7 @@ collectButton.addEventListener('click', () => {
     },
   }, (result) => {
     if (chrome.runtime.lastError || !result?.ok) {
-      setMessage('收录失败，请重试。', true);
+      setMessage(result?.message || chrome.runtime.lastError?.message || '收录失败，请重试。', true);
       collectButton.disabled = false;
       collectButton.textContent = '加入提示词库';
       return;

@@ -80,7 +80,7 @@ function captureFromTab(tab, content, overrides = {}) {
 }
 
 async function openCapturePopup(capture) {
-  await chrome.storage.local.set({
+  await setStored({
     [PENDING_CAPTURE_KEY]: {
       ...capture,
       pendingAt: Date.now(),
@@ -101,9 +101,18 @@ function getStored(key) {
 }
 
 function setStored(value) {
-  return new Promise((resolve) => {
-    chrome.storage.local.set(value, resolve);
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set(value, () => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve(true);
+    });
   });
+}
+
+function storageErrorMessage(error) {
+  const message = error?.message || '';
+  if (/quota|exceeded|full/i.test(message)) return '插件本机空间不足，请删除部分大图或先备份后清理';
+  return message || '收录失败，请重试';
 }
 
 async function queueCapture(capture) {
@@ -269,7 +278,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
   if (message?.type === 'collect-current') {
-    collectCurrentTab(message.capture || null).then(sendResponse).catch(() => sendResponse({ ok: false, message: '收录失败' }));
+    collectCurrentTab(message.capture || null).then(sendResponse).catch((error) => sendResponse({ ok: false, message: storageErrorMessage(error) }));
     return true;
   }
   if (message?.type === 'open-workbench') {

@@ -107,6 +107,8 @@ const folderStorageKey = 'promptly-folders-v1';
 const accountStorageKey = 'promptly-account-v1';
 const workspaceStorageKey = 'promptly-workspaces-v1';
 const themeStorageKey = 'promptly-theme-v1';
+const coverInputMaxBytes = 12 * 1024 * 1024;
+const coverMaxDataUrlLength = 520000;
 
 function cloneStarterPrompts() {
   return starterPrompts.map((prompt) => ({ ...prompt, tags: [...prompt.tags], preview: normalizePreviewSource(prompt.preview) }));
@@ -258,35 +260,163 @@ function getActiveWorkspace() {
   return state.workspaces.find((workspace) => workspace.id === state.workspaceId) || state.workspaces[0];
 }
 
-function persistWorkspaceCatalog() {
+function createWorkspaceCatalogPayload() {
+  const workspaces = state.workspaces.map((workspace) => normalizeWorkspace(
+    workspace.id === state.workspaceId
+      ? { ...workspace, prompts: state.prompts, folders: state.folders }
+      : workspace,
+  ));
+  return { version: 1, activeId: state.workspaceId, workspaces };
+}
+
+function persistWorkspaceCatalog(options = {}) {
+  const payload = createWorkspaceCatalogPayload();
+  const payloadText = JSON.stringify(payload);
+  let legacyPrompts = null;
+  let legacyFolders = null;
   try {
-    const active = getActiveWorkspace();
-    if (active) {
-      active.prompts = clonePrompts(state.prompts);
-      active.folders = [...state.folders];
+    legacyPrompts = localStorage.getItem(promptStorageKey);
+    legacyFolders = localStorage.getItem(folderStorageKey);
+    localStorage.setItem(workspaceStorageKey, payloadText);
+    localStorage.removeItem(promptStorageKey);
+    localStorage.removeItem(folderStorageKey);
+    state.workspaces = payload.workspaces;
+    return true;
+  } catch (firstError) {
+    try {
+      localStorage.removeItem(promptStorageKey);
+      localStorage.removeItem(folderStorageKey);
+      localStorage.setItem(workspaceStorageKey, payloadText);
+      state.workspaces = payload.workspaces;
+      return true;
+    } catch (error) {
+      try {
+        if (legacyPrompts !== null) localStorage.setItem(promptStorageKey, legacyPrompts);
+        if (legacyFolders !== null) localStorage.setItem(folderStorageKey, legacyFolders);
+      } catch {
+        // Best-effort restore only; the in-memory state is still kept for this session.
+      }
+      if (!options.silent) showStorageError(error || firstError);
+      return false;
     }
-    localStorage.setItem(workspaceStorageKey, JSON.stringify({ version: 1, activeId: state.workspaceId, workspaces: state.workspaces }));
-  } catch {
-    // The app remains usable in memory when local storage is full or unavailable.
   }
 }
 
-function persistPrompts() {
+function persistPrompts(options = {}) {
+  return persistWorkspaceCatalog(options);
+}
+
+function persistFolders(options = {}) {
+  return persistWorkspaceCatalog(options);
+}
+
+function getStorageUsageBytes() {
   try {
-    localStorage.setItem(promptStorageKey, JSON.stringify(state.prompts));
-    persistWorkspaceCatalog();
+    return [workspaceStorageKey, promptStorageKey, folderStorageKey, accountStorageKey, themeStorageKey]
+      .reduce((total, key) => total + new Blob([localStorage.getItem(key) || '']).size, 0);
   } catch {
-    // Local storage is optional; the current session remains usable when unavailable.
+    return 0;
   }
 }
 
-function persistFolders() {
-  try {
-    localStorage.setItem(folderStorageKey, JSON.stringify(state.folders));
-    persistWorkspaceCatalog();
-  } catch {
-    // Local storage is optional; the current session remains usable when unavailable.
+function isQuotaError(error) {
+  const message = `${error?.name || ''} ${error?.message || ''}`;
+  return /quota|exceeded|full/i.test(message);
+}
+
+function showStorageError(error) {
+  const used = getStorageUsageBytes();
+  const usedLabel = used < 1024 * 1024 ? `${Math.ceil(used / 1024)}KB` : `${(used / (1024 * 1024)).toFixed(1)}MB`;
+  showToast(
+    isQuotaError(error)
+      ? `保存失败：本地空间不足（已用约 ${usedLabel}），请删除部分大图后重试`
+      : '保存失败：浏览器本地存储暂时不可用',
+    'triangle-alert',
+  );
+}
+
+function readImageFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('read-image-failed'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('load-image-failed'));
+    image.src = dataUrl;
+  });
+}
+
+function renderCompressedImageDataUrl(image, width, height, quality) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('canvas-unavailable');
+  context.fillStyle = '#fff';
+  context.fillRect(0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
+async function compressImageDataUrl(dataUrl, options = {}) {
+  const image = await loadImageFromDataUrl(dataUrl);
+  const sourceWidth = image.naturalWidth || image.width || 1;
+  const sourceHeight = image.naturalHeight || image.height || 1;
+  const maxWidth = options.maxWidth || 1280;
+  const maxHeight = options.maxHeight || 720;
+  const scale = Math.min(1, maxWidth / sourceWidth, maxHeight / sourceHeight);
+  let width = Math.max(1, Math.round(sourceWidth * scale));
+  let height = Math.max(1, Math.round(sourceHeight * scale));
+  let quality = options.quality || 0.84;
+  let compressed = renderCompressedImageDataUrl(image, width, height, quality);
+
+  while (compressed.length > coverMaxDataUrlLength && (quality > 0.52 || width > 640 || height > 360)) {
+    if (quality > 0.52) {
+      quality = Math.max(0.52, quality - 0.08);
+    } else {
+      width = Math.max(320, Math.round(width * 0.82));
+      height = Math.max(180, Math.round(height * 0.82));
+      quality = 0.76;
+    }
+    compressed = renderCompressedImageDataUrl(image, width, height, quality);
   }
+  return compressed;
+}
+
+async function prepareCoverImageFile(file) {
+  if (!file) return '';
+  if (!file.type.startsWith('image/') && !/\.(png|jpe?g|webp|gif|bmp|tiff?)$/i.test(file.name || '')) throw new Error('cover-not-image');
+  if (file.size > coverInputMaxBytes) throw new Error('cover-too-large');
+  const dataUrl = await readImageFileAsDataUrl(file);
+  if (dataUrl.length <= coverMaxDataUrlLength) return dataUrl;
+  return compressImageDataUrl(dataUrl);
+}
+
+async function preparePreviewForStorage(preview, fallback = referenceImages.defaultCover) {
+  const normalized = normalizePreviewSource(preview, fallback);
+  if (!normalized.startsWith('data:image/')) return normalized;
+  if (normalized.length <= coverMaxDataUrlLength) return normalized;
+  try {
+    return await compressImageDataUrl(normalized);
+  } catch {
+    return fallback;
+  }
+}
+
+function showCoverReadError(error) {
+  showToast(
+    error?.message === 'cover-too-large'
+      ? '图片过大，请粘贴 12MB 内图片'
+      : '封面读取失败，请换一张图片',
+    'triangle-alert',
+  );
 }
 
 function persistAccount() {
@@ -344,21 +474,31 @@ function acknowledgeExtensionCaptures(ids) {
   window.postMessage({ source: 'promptly-app', type: 'captures-imported', ids }, window.location.origin);
 }
 
-function importExtensionCaptures(captures) {
+async function promptFromCaptureForStorage(capture) {
+  const preview = await preparePreviewForStorage(capture.preview, '');
+  return promptFromCapture({ ...capture, preview });
+}
+
+async function importExtensionCaptures(captures) {
   const incoming = Array.isArray(captures) ? captures : [];
   if (!incoming.length) return;
   const importedIds = [];
   const newPrompts = [];
-  incoming.forEach((capture, index) => {
+  for (const [index, capture] of incoming.entries()) {
     const captureId = capture?.id || `extension-${Date.now()}-${index}`;
-    importedIds.push(captureId);
     const normalizedCapture = { ...capture, id: captureId };
-    const prompt = promptFromCapture(normalizedCapture);
-    if (prompt && !state.prompts.some((item) => samePromptId(item.id, prompt.id))) newPrompts.push(prompt);
-  });
+    const prompt = await promptFromCaptureForStorage(normalizedCapture);
+    if (!prompt) continue;
+    importedIds.push(captureId);
+    if (!state.prompts.some((item) => samePromptId(item.id, prompt.id))) newPrompts.push(prompt);
+  }
   if (newPrompts.length) {
+    const previousPrompts = clonePrompts(state.prompts);
     state.prompts = [...newPrompts.reverse(), ...state.prompts];
-    persistPrompts();
+    if (!persistPrompts()) {
+      state.prompts = previousPrompts;
+      return;
+    }
     render();
     showToast(newPrompts.length === 1 ? '已录入提示库' : `已录入 ${newPrompts.length} 条提示词`, 'bookmark-check');
   }
@@ -410,8 +550,9 @@ const state = {
 if (incomingCapture) {
   const capturedPrompt = promptFromCapture(incomingCapture);
   if (capturedPrompt) {
+    const previousPrompts = clonePrompts(state.prompts);
     state.prompts.unshift(capturedPrompt);
-    persistPrompts();
+    if (!persistPrompts()) state.prompts = previousPrompts;
   }
   window.history.replaceState({}, document.title, window.location.pathname);
 }
@@ -1136,8 +1277,12 @@ function bindEvents() {
   document.querySelectorAll('[data-favorite]').forEach((button) => button.addEventListener('click', (event) => {
     event.stopPropagation();
     const prompt = findPrompt(button.dataset.favorite);
-    if (prompt) prompt.favorite = !prompt.favorite;
-    persistPrompts();
+    if (!prompt) return;
+    prompt.favorite = !prompt.favorite;
+    if (!persistPrompts()) {
+      prompt.favorite = !prompt.favorite;
+      return;
+    }
     render();
     showToast(prompt?.favorite ? '已加入常用' : '已从常用移除', 'star');
   }));
@@ -1177,18 +1322,15 @@ function bindEvents() {
     if (!item) return;
     const file = item.getAsFile();
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) return showToast('封面图片请控制在 2MB 内', 'triangle-alert');
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = String(reader.result || '');
+    event.preventDefault();
+    showToast('正在处理封面...', 'image');
+    prepareCoverImageFile(file).then((dataUrl) => {
       const preview = document.querySelector('#drawer-cover-preview');
       if (!preview) return;
       preview.src = dataUrl;
       preview.dataset.preview = dataUrl;
       showToast('封面已替换，保存后生效', 'image');
-    };
-    reader.readAsDataURL(file);
-    event.preventDefault();
+    }).catch(showCoverReadError);
   });
   document.querySelector('#prd-input')?.addEventListener('input', (event) => { state.analysis.note = event.target.value; });
   document.querySelector('#prototype-url')?.addEventListener('input', (event) => { state.analysis.note = event.target.value; });
@@ -1613,18 +1755,20 @@ function handleAssetFile(file) {
   state.analysis.profile = createPendingAnalysisProfile(file.name);
   render();
   showToast(`已添加 ${file.name}`, 'image-plus');
-  if (isImage && file.size <= 2 * 1024 * 1024) {
-    const reader = new FileReader();
-    reader.onload = () => {
+  if (isImage) {
+    prepareCoverImageFile(file).then((dataUrl) => {
       if (state.analysis.assetName !== file.name) return;
-      state.analysis.assetPreview = String(reader.result || '');
+      state.analysis.assetPreview = dataUrl;
       render();
-    };
-    reader.readAsDataURL(file);
+    }).catch((error) => {
+      if (error?.message === 'cover-too-large') showToast('图片可用于本次分析，但超过 12MB 不会保存为封面', 'info');
+    });
   }
 }
 
 async function handleImportFile(file) {
+  const previousPrompts = state.prompts;
+  const previousFolders = state.folders;
   try {
     const text = await file.text();
     const raw = JSON.parse(text);
@@ -1649,17 +1793,35 @@ async function handleImportFile(file) {
     const imported = records.map((record, index) => normalizeImportedPrompt(record, index)).filter(Boolean);
     if (!imported.length) throw new Error('empty');
     state.prompts = [...imported, ...state.prompts];
-    persistFolders();
-    persistPrompts();
+    if (!persistPrompts()) {
+      state.prompts = previousPrompts;
+      state.folders = previousFolders;
+      return;
+    }
     render();
     showToast(`已导入 ${imported.length} 条提示词到「${getActiveWorkspace()?.name || '本地库'}」`, 'upload');
   } catch {
+    state.prompts = previousPrompts;
+    state.folders = previousFolders;
     showToast('导入失败，请选择有效的 JSON 文件', 'triangle-alert');
   }
 }
 
 function importWorkspaceCatalog(workspaces) {
-  persistWorkspaceCatalog();
+  const previous = {
+    workspaces: state.workspaces,
+    workspaceId: state.workspaceId,
+    prompts: state.prompts,
+    folders: state.folders,
+    search: state.search,
+    libraryFilter: state.libraryFilter,
+    typeFilter: state.typeFilter,
+    selectedTag: state.selectedTag,
+    selectedPromptId: state.selectedPromptId,
+    selectedPromptIds: state.selectedPromptIds,
+    selectMode: state.selectMode,
+  };
+  persistWorkspaceCatalog({ silent: true });
   const imported = workspaces
     .map((workspace, index) => normalizeWorkspace({
       ...workspace,
@@ -1679,7 +1841,10 @@ function importWorkspaceCatalog(workspaces) {
   state.selectedPromptId = null;
   state.selectedPromptIds = [];
   state.selectMode = false;
-  persistWorkspaceCatalog();
+  if (!persistWorkspaceCatalog()) {
+    Object.assign(state, previous);
+    return;
+  }
   render();
   showToast(`已导入 ${imported.length} 个本地页签`, 'upload');
 }
@@ -1754,7 +1919,7 @@ function downloadFile(filename, content, type) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function handleAction(action, element, event) {
+async function handleAction(action, element, event) {
   if (action === 'quick-capture') return openCaptureModal();
   if (action === 'open-account') return openAccountModal();
   if (action === 'open-workspaces') return openWorkspaceModal();
@@ -1822,10 +1987,17 @@ function handleAction(action, element, event) {
     const prompt = state.prompts.find((item) => samePromptId(item.id, state.selectedPromptId));
     if (!prompt) return;
     if (!window.confirm(`确定删除「${prompt.title}」吗？`)) return;
+    const previousPrompts = clonePrompts(state.prompts);
+    const previousSelectedPromptId = state.selectedPromptId;
     state.prompts = state.prompts.filter((item) => !samePromptId(item.id, state.selectedPromptId));
     state.selectedPromptId = null;
     state.drawerEditing = false;
-    persistPrompts();
+    if (!persistPrompts()) {
+      state.prompts = previousPrompts;
+      state.selectedPromptId = previousSelectedPromptId;
+      state.drawerEditing = false;
+      return;
+    }
     render();
     showToast('提示词已删除', 'trash-2');
     return;
@@ -1847,13 +2019,18 @@ function handleAction(action, element, event) {
       ...prompt,
       title: titleEditor?.value.trim() || prompt.title,
       prompt: editor ? sanitizePromptContent(editor.value.trim()) || prompt.prompt : prompt.prompt,
-      preview: coverPreview?.dataset.preview || prompt.preview,
+      preview: await preparePreviewForStorage(coverPreview?.dataset.preview || prompt.preview),
       tags: tagEditor ? normalizeTags(tagEditor.value) : normalizeTags(prompt.tags),
       updated: '刚刚',
     };
+    const previousPrompts = clonePrompts(state.prompts);
     replacePrompt(updatedPrompt);
+    if (!persistPrompts()) {
+      state.prompts = previousPrompts;
+      state.drawerEditing = true;
+      return;
+    }
     state.drawerEditing = false;
-    persistPrompts();
     render();
     showToast('提示词修改已保存', 'save');
     return;
@@ -1910,16 +2087,24 @@ function handleAction(action, element, event) {
     const content = getAnalysisContent();
     const title = state.analysis.source === '截图' ? `${state.analysis.assetName || '参考图'} UI 分析` : state.analysis.source === 'PRD' ? 'PRD UI 规划提示词' : '原型 UI 解析结果';
     const existing = state.prompts.find((prompt) => prompt.id === state.analysis.savedPromptId);
+    const previousPrompts = clonePrompts(state.prompts);
+    const previousSaved = state.analysis.saved;
+    const previousSavedPromptId = state.analysis.savedPromptId;
     if (existing) {
       existing.prompt = content;
       existing.title = title;
       existing.updated = '刚刚';
     } else {
       const id = Date.now();
-      state.prompts.unshift({ id, createdAt: Date.now(), title, type: 'UI提示词', folder: '产品界面', tags: ['#UI 设计', '#截图分析'], status: '常用', updated: '刚刚', source: 'UI 分析', preview: persistablePreview(state.analysis.assetPreview), prompt: content, favorite: true });
+      state.prompts.unshift({ id, createdAt: Date.now(), title, type: 'UI提示词', folder: '产品界面', tags: ['#UI 设计', '#截图分析'], status: '常用', updated: '刚刚', source: 'UI 分析', preview: await preparePreviewForStorage(state.analysis.assetPreview), prompt: content, favorite: true });
       state.analysis.savedPromptId = id;
     }
-    persistPrompts();
+    if (!persistPrompts()) {
+      state.prompts = previousPrompts;
+      state.analysis.saved = previousSaved;
+      state.analysis.savedPromptId = previousSavedPromptId;
+      return;
+    }
     state.analysis.saved = true;
     render();
     showToast(existing ? '已更新提示词库中的内容' : '已加入提示词库', 'bookmark-check');
@@ -1983,6 +2168,7 @@ function openCaptureModal() {
   const imageBox = modal.querySelector('#capture-image-box');
   const typeSelect = wireCustomSelect(modal.querySelector('[data-custom-select="capture-type"]'));
   let imageData = '';
+  let imageProcessing = false;
   const updateImage = (value) => {
     imageData = value || '';
     if (imageData) preview.src = imageData;
@@ -1991,13 +2177,19 @@ function openCaptureModal() {
     removeImage.hidden = !imageData;
     imageBox.classList.toggle('has-image', Boolean(imageData));
   };
-  const readCaptureImageFile = (file) => {
+  const readCaptureImageFile = async (file) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) return showToast('请选择图片文件', 'triangle-alert');
-    if (file.size > 2 * 1024 * 1024) return showToast('图片请控制在 2MB 内', 'triangle-alert');
-    const reader = new FileReader();
-    reader.onload = () => updateImage(String(reader.result || ''));
-    reader.readAsDataURL(file);
+    imageProcessing = true;
+    showToast('正在处理封面...', 'image');
+    try {
+      updateImage(await prepareCoverImageFile(file));
+      showToast('封面已粘贴并压缩', 'image');
+    } catch (error) {
+      showCoverReadError(error);
+    } finally {
+      imageProcessing = false;
+    }
   };
   modal.querySelectorAll('[data-modal-action="close"]').forEach((button) => button.addEventListener('click', () => modal.remove()));
   modal.addEventListener('click', (event) => {
@@ -2007,8 +2199,8 @@ function openCaptureModal() {
     const item = [...(event.clipboardData?.items || [])].find((entry) => entry.type.startsWith('image/'));
     if (!item) return;
     const file = item.getAsFile();
-    readCaptureImageFile(file);
     event.preventDefault();
+    readCaptureImageFile(file);
   });
   removeImage.addEventListener('click', () => updateImage(''));
   modal.querySelector('[data-modal-action="ai-title"]')?.addEventListener('click', () => {
@@ -2021,7 +2213,8 @@ function openCaptureModal() {
     if (!content) return showToast('请先粘贴提示词文字', 'info');
     copyText(content, '提示词已复制');
   });
-  modal.querySelector('[data-modal-action="save"]')?.addEventListener('click', () => {
+  modal.querySelector('[data-modal-action="save"]')?.addEventListener('click', async () => {
+    if (imageProcessing) return showToast('封面还在处理中，请稍等', 'info');
     const content = sanitizePromptContent(body.value.trim());
     if (!content && !imageData) return showToast('请先粘贴文字或图片', 'info');
     const capture = {
@@ -2035,9 +2228,14 @@ function openCaptureModal() {
       sourceUrl: modal.querySelector('#capture-source').value.trim(),
       sourceTitle: document.title,
     };
-    const prompt = promptFromCapture(capture);
+    const prompt = await promptFromCaptureForStorage(capture);
+    if (!prompt) return showToast('收录内容无效，请补充文字或图片', 'triangle-alert');
+    const previousPrompts = clonePrompts(state.prompts);
     state.prompts.unshift(prompt);
-    persistPrompts();
+    if (!persistPrompts()) {
+      state.prompts = previousPrompts;
+      return;
+    }
     modal.remove();
     state.libraryFilter = '浏览器收集箱';
     state.typeFilter = '全部类型';
@@ -2087,7 +2285,20 @@ function openAccountModal() {
 function switchWorkspace(id) {
   const next = state.workspaces.find((workspace) => workspace.id === id);
   if (!next || next.id === state.workspaceId) return;
-  persistWorkspaceCatalog();
+  if (!persistWorkspaceCatalog()) return;
+  const previous = {
+    workspaceId: state.workspaceId,
+    prompts: clonePrompts(state.prompts),
+    folders: [...state.folders],
+    search: state.search,
+    libraryFilter: state.libraryFilter,
+    typeFilter: state.typeFilter,
+    selectedTag: state.selectedTag,
+    selectedPromptId: state.selectedPromptId,
+    selectedPromptIds: [...state.selectedPromptIds],
+    selectMode: state.selectMode,
+    drawerEditing: state.drawerEditing,
+  };
   state.workspaceId = next.id;
   state.prompts = clonePrompts(next.prompts);
   state.folders = [...next.folders];
@@ -2099,7 +2310,10 @@ function switchWorkspace(id) {
   state.selectedPromptIds = [];
   state.selectMode = false;
   state.drawerEditing = false;
-  persistWorkspaceCatalog();
+  if (!persistWorkspaceCatalog()) {
+    Object.assign(state, previous);
+    return;
+  }
   render();
   showToast(`已切换到本地页签「${next.name}」`, 'layers-2');
 }
@@ -2134,8 +2348,12 @@ function openWorkspaceModal() {
     const id = button.dataset.deleteWorkspace;
     const workspace = state.workspaces.find((item) => item.id === id);
     if (!workspace || !window.confirm(`确定删除本地页签「${workspace.name}」吗？`)) return;
+    const previousWorkspaces = state.workspaces.map((item, index) => normalizeWorkspace(item, index));
     state.workspaces = state.workspaces.filter((item) => item.id !== id);
-    persistWorkspaceCatalog();
+    if (!persistWorkspaceCatalog()) {
+      state.workspaces = previousWorkspaces;
+      return;
+    }
     modal.remove();
     render();
     showToast(`已删除本地页签「${workspace.name}」`, 'trash-2');
@@ -2145,7 +2363,12 @@ function openWorkspaceModal() {
     if (!name) return showToast('请输入本地页签名称', 'info');
     if (state.workspaces.some((workspace) => workspace.name === name)) return showToast('本地页签已存在', 'triangle-alert');
     const workspace = normalizeWorkspace({ id: `local-${Date.now()}`, name, prompts: [], folders: ['产品界面', '图片风格', '未整理'] }, state.workspaces.length);
+    const previousWorkspaces = state.workspaces.map((item, index) => normalizeWorkspace(item, index));
     state.workspaces.push(workspace);
+    if (!persistWorkspaceCatalog()) {
+      state.workspaces = previousWorkspaces;
+      return;
+    }
     modal.remove();
     switchWorkspace(workspace.id);
   });
@@ -2170,8 +2393,12 @@ function openFolderModal() {
     const name = modal.querySelector('#folder-name').value.trim();
     if (!name) return showToast('请输入文件夹名称', 'info');
     if (state.folders.includes(name)) return showToast('文件夹已存在', 'triangle-alert');
+    const previousFolders = [...state.folders];
     state.folders.push(name);
-    persistFolders();
+    if (!persistFolders()) {
+      state.folders = previousFolders;
+      return;
+    }
     modal.remove();
     render();
     showToast(`已创建文件夹「${name}」`, 'folder-plus');
@@ -2258,7 +2485,11 @@ window.addEventListener('resize', requestMotionStateUpdate);
 
 window.addEventListener('message', (event) => {
   if (event.source !== window || event.data?.source !== 'promptly-extension') return;
-  if (event.data.type === 'queued-captures') importExtensionCaptures(event.data.captures);
+  if (event.data.type === 'queued-captures') {
+    importExtensionCaptures(event.data.captures).catch(() => {
+      showToast('插件收录同步失败，请稍后重试', 'triangle-alert');
+    });
+  }
 });
 
 window.addEventListener('storage', (event) => {
